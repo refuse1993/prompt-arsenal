@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# API Keys & Config
+config.json
+.env
+
+# Generated Files
+media/
+*.png
+*.jpg
+*.jpeg
+*.wav
+*.mp4
+*.avi
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Test outputs
+test_*.png
+test_*.wav
+adversarial_comparison.png
+
+# Backup files
+*.backup
