@@ -47,3 +47,6 @@ adversarial_comparison.png
 
 # Backup files
 *.backup
+test_multiturn.py
+test_real_llm.py
+generated_images/

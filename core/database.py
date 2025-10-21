@@ -102,6 +102,137 @@ class ArsenalDB:
             )
         ''')
 
+        # === Multi-Turn Attack Tables ===
+
+        # Multi-turn campaigns table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS multi_turn_campaigns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                goal TEXT NOT NULL,
+                strategy TEXT NOT NULL,
+                target_provider TEXT NOT NULL,
+                target_model TEXT NOT NULL,
+                max_turns INTEGER DEFAULT 10,
+                status TEXT DEFAULT 'pending',
+                started_at TEXT,
+                completed_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Multi-turn conversations table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS multi_turn_conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                turn_number INTEGER NOT NULL,
+                prompt_text TEXT,
+                prompt_images TEXT,
+                prompt_audio TEXT,
+                prompt_video TEXT,
+                response TEXT NOT NULL,
+                prompt_strategy TEXT,
+                response_time REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES multi_turn_campaigns(id)
+            )
+        ''')
+
+        # Multi-turn evaluations table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS multi_turn_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                turn_number INTEGER NOT NULL,
+                goal_achieved BOOLEAN,
+                progress REAL,
+                toxicity TEXT,
+                defense_triggered BOOLEAN,
+                reasoning TEXT,
+                evaluated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES multi_turn_campaigns(id)
+            )
+        ''')
+
+        # Attack strategies library table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS attack_strategies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                category TEXT NOT NULL,
+                modality TEXT DEFAULT 'text',
+                description TEXT,
+                turn_templates TEXT,
+                success_rate REAL DEFAULT 0.0,
+                avg_turns_to_success REAL,
+                usage_count INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Visual story sequences table (for Visual Storytelling strategy)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS visual_story_sequences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                panel_number INTEGER NOT NULL,
+                image_path TEXT NOT NULL,
+                image_prompt TEXT NOT NULL,
+                image_hash TEXT,
+                safety_score REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES multi_turn_campaigns(id)
+            )
+        ''')
+
+        # Image generation metadata table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS image_generation_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sequence_id INTEGER NOT NULL,
+                model TEXT NOT NULL,
+                parameters TEXT,
+                generation_time REAL,
+                file_size INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sequence_id) REFERENCES visual_story_sequences(id)
+            )
+        ''')
+
+        # Audio sequences table (for audio-based attacks)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audio_sequences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                segment_number INTEGER NOT NULL,
+                audio_path TEXT NOT NULL,
+                audio_prompt TEXT NOT NULL,
+                audio_hash TEXT,
+                duration REAL,
+                safety_score REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES multi_turn_campaigns(id)
+            )
+        ''')
+
+        # Video sequences table (for video-based attacks)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS video_sequences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                clip_number INTEGER NOT NULL,
+                video_path TEXT NOT NULL,
+                video_prompt TEXT NOT NULL,
+                video_hash TEXT,
+                duration REAL,
+                frame_count INTEGER,
+                safety_score REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES multi_turn_campaigns(id)
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -534,3 +665,331 @@ class ArsenalDB:
             'media_deleted': media_count,
             'multimodal_results_deleted': multimodal_results_count
         }
+
+    # === Multi-Turn Campaign Management ===
+
+    def create_campaign(self, name: str, goal: str, strategy: str,
+                       target_provider: str, target_model: str, max_turns: int = 10) -> int:
+        """Create a new multi-turn attack campaign"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO multi_turn_campaigns
+            (name, goal, strategy, target_provider, target_model, max_turns, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+        ''', (name, goal, strategy, target_provider, target_model, max_turns))
+
+        campaign_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return campaign_id
+
+    def update_campaign_status(self, campaign_id: int, status: str,
+                               started_at: str = None, completed_at: str = None):
+        """Update campaign status"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        updates = ['status = ?']
+        values = [status]
+
+        if started_at:
+            updates.append('started_at = ?')
+            values.append(started_at)
+        if completed_at:
+            updates.append('completed_at = ?')
+            values.append(completed_at)
+
+        values.append(campaign_id)
+        query = f"UPDATE multi_turn_campaigns SET {', '.join(updates)} WHERE id = ?"
+
+        cursor.execute(query, values)
+        conn.commit()
+        conn.close()
+
+    def insert_conversation_turn(self, campaign_id: int, turn_number: int,
+                                 prompt_text: str = None, response: str = "",
+                                 prompt_images: str = None, prompt_audio: str = None,
+                                 prompt_video: str = None, prompt_strategy: str = None,
+                                 response_time: float = 0.0) -> int:
+        """Insert a conversation turn"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO multi_turn_conversations
+            (campaign_id, turn_number, prompt_text, prompt_images, prompt_audio,
+             prompt_video, response, prompt_strategy, response_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (campaign_id, turn_number, prompt_text, prompt_images, prompt_audio,
+              prompt_video, response, prompt_strategy, response_time))
+
+        turn_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return turn_id
+
+    def insert_turn_evaluation(self, campaign_id: int, turn_number: int,
+                               goal_achieved: bool, progress: float, toxicity: str,
+                               defense_triggered: bool, reasoning: str = "") -> int:
+        """Insert turn evaluation"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO multi_turn_evaluations
+            (campaign_id, turn_number, goal_achieved, progress, toxicity,
+             defense_triggered, reasoning)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (campaign_id, turn_number, goal_achieved, progress, toxicity,
+              defense_triggered, reasoning))
+
+        eval_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return eval_id
+
+    def get_campaign(self, campaign_id: int) -> Optional[Dict]:
+        """Get campaign details"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM multi_turn_campaigns WHERE id = ?', (campaign_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        return dict(row) if row else None
+
+    def get_campaign_conversations(self, campaign_id: int) -> List[Dict]:
+        """Get all conversations for a campaign"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM multi_turn_conversations
+            WHERE campaign_id = ?
+            ORDER BY turn_number
+        ''', (campaign_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_campaign_evaluations(self, campaign_id: int) -> List[Dict]:
+        """Get all evaluations for a campaign"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM multi_turn_evaluations
+            WHERE campaign_id = ?
+            ORDER BY turn_number
+        ''', (campaign_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_all_campaigns(self, status: str = None, limit: int = 100) -> List[Dict]:
+        """Get all campaigns, optionally filtered by status"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if status:
+            cursor.execute('''
+                SELECT * FROM multi_turn_campaigns
+                WHERE status = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (status, limit))
+        else:
+            cursor.execute('''
+                SELECT * FROM multi_turn_campaigns
+                ORDER BY created_at DESC
+                LIMIT ?
+            ''', (limit,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_campaign_by_id(self, campaign_id: int) -> Optional[Dict]:
+        """Get campaign by ID"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM multi_turn_campaigns WHERE id = ?', (campaign_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        return dict(row) if row else None
+
+    def get_turn_evaluation(self, campaign_id: int, turn_number: int) -> Optional[Dict]:
+        """Get evaluation for a specific turn"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM turn_evaluations
+            WHERE campaign_id = ? AND turn_number = ?
+        ''', (campaign_id, turn_number))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        return dict(row) if row else None
+
+    # === Attack Strategy Management ===
+
+    def insert_strategy(self, name: str, category: str, modality: str = 'text',
+                       description: str = "", turn_templates: str = "") -> int:
+        """Insert attack strategy"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('''
+                INSERT INTO attack_strategies
+                (name, category, modality, description, turn_templates)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (name, category, modality, description, turn_templates))
+
+            strategy_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return strategy_id
+        except sqlite3.IntegrityError:
+            # Strategy already exists
+            conn.close()
+            return self.get_strategy_by_name(name)['id']
+
+    def get_strategy_by_name(self, name: str) -> Optional[Dict]:
+        """Get strategy by name"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM attack_strategies WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        conn.close()
+
+        return dict(row) if row else None
+
+    def get_all_strategies(self, modality: str = None) -> List[Dict]:
+        """Get all strategies, optionally filtered by modality"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if modality:
+            cursor.execute('''
+                SELECT * FROM attack_strategies
+                WHERE modality = ?
+                ORDER BY success_rate DESC
+            ''', (modality,))
+        else:
+            cursor.execute('''
+                SELECT * FROM attack_strategies
+                ORDER BY success_rate DESC
+            ''')
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def update_strategy_stats(self, strategy_name: str, success: bool, turns_used: int):
+        """Update strategy success rate and average turns"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Get current stats
+        cursor.execute('''
+            SELECT success_rate, avg_turns_to_success, usage_count
+            FROM attack_strategies WHERE name = ?
+        ''', (strategy_name,))
+
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return
+
+        current_rate, current_avg_turns, usage_count = row
+        new_usage_count = usage_count + 1
+
+        # Calculate new success rate
+        total_successes = current_rate * usage_count
+        if success:
+            total_successes += 1
+        new_success_rate = total_successes / new_usage_count
+
+        # Calculate new average turns (only for successful attempts)
+        if success:
+            if current_avg_turns is None:
+                new_avg_turns = turns_used
+            else:
+                successful_count = total_successes
+                new_avg_turns = (current_avg_turns * (successful_count - 1) + turns_used) / successful_count
+        else:
+            new_avg_turns = current_avg_turns
+
+        # Update
+        cursor.execute('''
+            UPDATE attack_strategies
+            SET success_rate = ?, avg_turns_to_success = ?, usage_count = ?
+            WHERE name = ?
+        ''', (new_success_rate, new_avg_turns, new_usage_count, strategy_name))
+
+        conn.commit()
+        conn.close()
+
+    # === Visual Story Sequences ===
+
+    def insert_visual_panel(self, campaign_id: int, panel_number: int,
+                           image_path: str, image_prompt: str,
+                           image_hash: str = None, safety_score: float = None) -> int:
+        """Insert visual story panel"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO visual_story_sequences
+            (campaign_id, panel_number, image_path, image_prompt, image_hash, safety_score)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (campaign_id, panel_number, image_path, image_prompt, image_hash, safety_score))
+
+        panel_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return panel_id
+
+    def get_visual_panels(self, campaign_id: int) -> List[Dict]:
+        """Get all visual panels for a campaign"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM visual_story_sequences
+            WHERE campaign_id = ?
+            ORDER BY panel_number
+        ''', (campaign_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]

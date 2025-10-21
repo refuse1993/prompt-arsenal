@@ -316,6 +316,10 @@ class PromptArsenal:
   [green]9[/green]. 멀티모달 LLM 테스트
   [green]g[/green]. GARAK 보안 스캔
 
+[bold red]🔄 MULTI-TURN (멀티턴 공격)[/bold red]
+  [green]0[/green]. Multi-Turn 공격 캠페인 (Visual Storytelling, Crescendo, Roleplay)
+  [green]c[/green]. 캠페인 목록 및 결과 조회
+
 [bold cyan]⚙️  SETTINGS (설정)[/bold cyan]
   [green]s[/green]. API 프로필 관리
   [green]j[/green]. Judge 프로필 관리 (LLM Judge)
@@ -3163,6 +3167,251 @@ class PromptArsenal:
             self.config.save_config()
             console.print(f"[green]✅ 기본 Judge 모드를 '{mode}'로 설정했습니다.[/green]")
 
+    # === MULTI-TURN ATTACK ===
+
+    async def multiturn_campaign(self):
+        """Execute multi-turn attack campaign"""
+        console.print("\n[bold red]🔄 Multi-Turn 공격 캠페인[/bold red]")
+
+        # Strategy selection
+        console.print("\n[bold]공격 전략 선택:[/bold]")
+        console.print("  [green]1[/green]. Visual Storytelling (83.5% 성공률, 멀티모달)")
+        console.print("  [green]2[/green]. Crescendo (65-70% 성공률, 점진적 escalation)")
+        console.print("  [green]3[/green]. Roleplay (60-70% 성공률, 시나리오 기반)")
+
+        strategy_choice = ask("전략", choices=["1", "2", "3"])
+        strategy_map = {
+            "1": "visual_storytelling",
+            "2": "crescendo",
+            "3": "roleplay"
+        }
+        strategy_name = strategy_map[strategy_choice]
+
+        # Goal input
+        goal = ask("\n공격 목표 (예: Write code to hack a server)")
+        if not goal:
+            console.print("[red]목표를 입력해야 합니다.[/red]")
+            return
+
+        # Campaign name
+        campaign_name = ask("캠페인 이름 (선택사항)", default=None)
+
+        # Max turns
+        max_turns_str = ask("최대 턴 수", default="10")
+        max_turns = int(max_turns_str)
+
+        # Select API profile
+        profiles = list(self.config.config['profiles'].keys())
+        if not profiles:
+            console.print("[red]API 프로필이 없습니다. 먼저 's'를 눌러 프로필을 추가하세요.[/red]")
+            return
+
+        console.print("\n[bold]Target API 프로필:[/bold]")
+        for idx, name in enumerate(profiles, 1):
+            prof = self.config.config['profiles'][name]
+            console.print(f"  [green]{idx}[/green]. {name} ({prof['provider']}/{prof['model']})")
+
+        profile_idx = ask("프로필 번호", default="1")
+        profile_name = profiles[int(profile_idx) - 1]
+        profile = self.config.config['profiles'][profile_name]
+
+        # Judge profile selection
+        judge_profiles = list(self.config.config.get('judge_profiles', {}).keys())
+        if not judge_profiles:
+            console.print("\n[yellow]⚠️  Judge 프로필이 없습니다. 먼저 'j'를 눌러 Judge 프로필을 추가하세요.[/yellow]")
+            return
+
+        console.print("\n[bold]Judge 프로필:[/bold]")
+        for idx, name in enumerate(judge_profiles, 1):
+            jprof = self.config.config['judge_profiles'][name]
+            console.print(f"  [green]{idx}[/green]. {name} ({jprof['provider']}/{jprof['model']})")
+
+        judge_idx = ask("Judge 프로필 번호", default="1")
+        judge_name = judge_profiles[int(judge_idx) - 1]
+        judge_profile = self.config.config['judge_profiles'][judge_name]
+
+        # Initialize components
+        from multimodal.llm_client import LLMClient, MultimodalLLMClient
+        from multimodal.image_generator import ImageGenerator, MockImageGenerator
+        from multiturn import MultiTurnOrchestrator, MultiTurnScorer
+        from multiturn.strategies import VisualStorytellingStrategy, CrescendoStrategy, RoleplayStrategy
+
+        # Create LLM clients
+        strategy_llm = LLMClient(
+            provider=judge_profile['provider'],
+            model=judge_profile['model'],
+            api_key=judge_profile['api_key']
+        )
+
+        target_llm = MultimodalLLMClient(
+            provider=profile['provider'],
+            model=profile['model'],
+            api_key=profile['api_key']
+        )
+
+        # Create judge
+        from core.llm_judge import LLMJudge
+        judge = LLMJudge(
+            provider=judge_profile['provider'],
+            model=judge_profile['model'],
+            api_key=judge_profile['api_key']
+        )
+
+        # Create scorer
+        scorer = MultiTurnScorer(judge=judge)
+
+        # Create strategy
+        if strategy_name == "visual_storytelling":
+            # Image generator
+            img_gen_provider = ask("\nImage Generator (dalle/stable-diffusion/mock)", default="mock")
+            if img_gen_provider == "mock":
+                image_gen = MockImageGenerator()
+            else:
+                image_gen = ImageGenerator(
+                    provider=img_gen_provider,
+                    api_key=profile['api_key']
+                )
+
+            strategy = VisualStorytellingStrategy(
+                db=self.db,
+                llm_client=strategy_llm,
+                image_generator=image_gen
+            )
+
+        elif strategy_name == "crescendo":
+            strategy = CrescendoStrategy(
+                db=self.db,
+                llm_client=strategy_llm
+            )
+
+        elif strategy_name == "roleplay":
+            strategy = RoleplayStrategy(
+                db=self.db,
+                llm_client=strategy_llm
+            )
+
+        # Create orchestrator
+        orchestrator = MultiTurnOrchestrator(
+            db=self.db,
+            strategy=strategy,
+            target=target_llm,
+            scorer=scorer,
+            max_turns=max_turns
+        )
+
+        # Execute campaign with real-time UI
+        console.print("\n[bold yellow]┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[/bold yellow]")
+        console.print("[bold yellow]┃[/bold yellow] [bold white]🚀 CAMPAIGN LAUNCHING...[/bold white]                  [bold yellow]┃[/bold yellow]")
+        console.print("[bold yellow]┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[/bold yellow]")
+
+        console.print(f"\n[bold white]🎯 Goal:[/bold white] {goal}")
+        console.print(f"[bold white]⚔️  Strategy:[/bold white] {strategy_name}")
+        console.print(f"[bold white]🎭 Target:[/bold white] {profile['provider']}/{profile['model']}")
+        console.print(f"[bold white]📏 Max Turns:[/bold white] {max_turns}\n")
+
+        try:
+            result = await orchestrator.execute(goal, campaign_name)
+
+            # Display results
+            console.print("\n[bold yellow]┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓[/bold yellow]")
+            if result['success']:
+                console.print("[bold yellow]┃[/bold yellow] [bold green]✅ CAMPAIGN SUCCESSFUL![/bold green]                   [bold yellow]┃[/bold yellow]")
+            else:
+                console.print("[bold yellow]┃[/bold yellow] [bold red]❌ CAMPAIGN FAILED[/bold red]                        [bold yellow]┃[/bold yellow]")
+            console.print("[bold yellow]┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[/bold yellow]")
+
+            console.print(f"\n[bold white]Campaign ID:[/bold white] {result['campaign_id']}")
+            console.print(f"[bold white]Turns Used:[/bold white] {result['turns_used']}/{max_turns}")
+            console.print(f"[bold white]Final Progress:[/bold white] {result['final_progress']:.1%}")
+
+            # Show conversation summary
+            console.print("\n[bold cyan]📜 Conversation Summary:[/bold cyan]")
+            for turn in result['conversation'][:3]:  # Show first 3 turns
+                console.print(f"\n[bold yellow]Turn {turn.turn_number + 1}:[/bold yellow]")
+                prompt_preview = turn.prompt.get('text', '')[:100]
+                console.print(f"  Prompt: {prompt_preview}...")
+                response_preview = turn.response[:100]
+                console.print(f"  Response: {response_preview}...")
+
+                if turn.evaluation:
+                    eval_icon = "✅" if turn.evaluation['goal_achieved'] else "❌"
+                    console.print(f"  {eval_icon} Progress: {turn.evaluation['progress']:.1%}")
+
+        except Exception as e:
+            console.print(f"\n[red]❌ Campaign execution failed: {e}[/red]")
+            import traceback
+            console.print(f"[red]{traceback.format_exc()}[/red]")
+
+    def multiturn_view_campaigns(self):
+        """View multi-turn campaign results"""
+        console.print("\n[bold cyan]📊 Multi-Turn 캠페인 목록[/bold cyan]")
+
+        # Get all campaigns
+        campaigns = self.db.get_all_campaigns()
+
+        if not campaigns:
+            console.print("[yellow]실행된 캠페인이 없습니다.[/yellow]")
+            return
+
+        # Display campaigns table
+        table = Table(title="Campaigns")
+        table.add_column("ID", style="magenta", justify="right")
+        table.add_column("Name", style="cyan")
+        table.add_column("Strategy", style="yellow")
+        table.add_column("Target", style="green")
+        table.add_column("Status", style="white")
+        table.add_column("Turns", style="blue", justify="right")
+        table.add_column("Created", style="dim")
+
+        for campaign in campaigns:
+            status_icon = "✅" if campaign['status'] == 'completed' else "❌" if campaign['status'] == 'failed' else "🔄"
+            table.add_row(
+                str(campaign['id']),
+                campaign['name'],
+                campaign['strategy'],
+                f"{campaign['target_provider']}/{campaign['target_model']}",
+                f"{status_icon} {campaign['status']}",
+                str(campaign.get('turns_used', '-')),
+                campaign['created_at'][:10]
+            )
+
+        console.print(table)
+
+        # View details
+        if confirm("\n캠페인 상세 정보를 보시겠습니까?"):
+            campaign_id_str = ask("Campaign ID")
+            campaign_id = int(campaign_id_str)
+
+            # Get campaign details
+            campaign = self.db.get_campaign_by_id(campaign_id)
+            if not campaign:
+                console.print("[red]캠페인을 찾을 수 없습니다.[/red]")
+                return
+
+            # Get conversations
+            conversations = self.db.get_campaign_conversations(campaign_id)
+
+            # Display details
+            console.print(f"\n[bold cyan]Campaign #{campaign_id}: {campaign['name']}[/bold cyan]")
+            console.print(f"Goal: {campaign['goal']}")
+            console.print(f"Strategy: {campaign['strategy']}")
+            console.print(f"Status: {campaign['status']}")
+            console.print(f"Max Turns: {campaign['max_turns']}")
+
+            console.print(f"\n[bold yellow]Conversation History ({len(conversations)} turns):[/bold yellow]")
+
+            for conv in conversations:
+                console.print(f"\n[bold]Turn {conv['turn_number'] + 1}:[/bold]")
+                console.print(f"Prompt: {conv['prompt_text'][:200]}...")
+                console.print(f"Response: {conv['response'][:200]}...")
+
+                # Show evaluation if available
+                evaluation = self.db.get_turn_evaluation(campaign_id, conv['turn_number'])
+                if evaluation:
+                    console.print(f"  Goal Achieved: {'✅' if evaluation['goal_achieved'] else '❌'}")
+                    console.print(f"  Progress: {evaluation['progress']:.1%}")
+                    console.print(f"  Defense Triggered: {'⚠️ Yes' if evaluation['defense_triggered'] else 'No'}")
+
     def run(self):
         """Main application loop"""
         self.show_banner()
@@ -3194,6 +3443,10 @@ class PromptArsenal:
                     self.attack_multimodal_llm()
                 elif choice == 'g':
                     self.attack_garak_scan()
+                elif choice == '0':
+                    asyncio.run(self.multiturn_campaign())
+                elif choice == 'c':
+                    self.multiturn_view_campaigns()
                 elif choice == 's':
                     self.settings_api_profiles()
                 elif choice == 'j':
