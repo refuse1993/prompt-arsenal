@@ -35,10 +35,22 @@ def ask(prompt, default=None, choices=None):
         return response if response else (default or "")
 
 
-def confirm(prompt):
+def confirm(prompt, default=None):
     """Simple yes/no confirmation"""
+    if default is True:
+        prompt_text = f"{prompt} [Y/n]: "
+    elif default is False:
+        prompt_text = f"{prompt} [y/N]: "
+    else:
+        prompt_text = f"{prompt} [y/n]: "
+
     while True:
-        response = input(f"{prompt} [y/n]: ").strip().lower()
+        response = input(prompt_text).strip().lower()
+
+        # 빈 입력 시 default 반환
+        if not response and default is not None:
+            return default
+
         if response in ['y', 'yes']:
             return True
         elif response in ['n', 'no']:
