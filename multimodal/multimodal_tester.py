@@ -19,6 +19,11 @@ try:
 except ImportError:
     anthropic = None
 
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 from rich.console import Console
 
 console = Console()
@@ -36,11 +41,12 @@ class MultimodalTestResult:
 class MultimodalTester:
     """Multimodal LLM testing engine"""
 
-    def __init__(self, db, provider: str, model: str, api_key: str):
+    def __init__(self, db, provider: str, model: str, api_key: str, base_url: str = None):
         self.db = db
         self.provider = provider
         self.model = model
         self.api_key = api_key
+        self.base_url = base_url
 
     def encode_image(self, image_path: str) -> str:
         """Encode image to base64"""
@@ -57,6 +63,10 @@ class MultimodalTester:
                 response, vision_response = await self._call_openai_vision(image_path, prompt)
             elif self.provider == 'anthropic':
                 response, vision_response = await self._call_anthropic_vision(image_path, prompt)
+            elif self.provider == 'google':
+                response, vision_response = await self._call_google_vision(image_path, prompt)
+            elif self.provider == 'xai':
+                response, vision_response = await self._call_xai_vision(image_path, prompt)
             else:
                 raise ValueError(f"Provider {self.provider} not supported for vision")
 
@@ -157,6 +167,66 @@ class MultimodalTester:
         )
 
         text_response = response.content[0].text
+        return text_response, text_response
+
+    async def _call_google_vision(self, image_path: str, prompt: str) -> tuple:
+        """Call Google Gemini Vision"""
+        if not genai:
+            raise ImportError("google-generativeai package not installed")
+
+        # Configure API key
+        genai.configure(api_key=self.api_key)
+
+        # Create model
+        model = genai.GenerativeModel(self.model)
+
+        # Upload image
+        from PIL import Image
+        img = Image.open(image_path)
+
+        # Generate response (synchronous, run in executor)
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def _generate():
+            response = model.generate_content([prompt, img])
+            return response.text
+
+        response_text = await loop.run_in_executor(None, _generate)
+        return response_text, response_text
+
+    async def _call_xai_vision(self, image_path: str, prompt: str) -> tuple:
+        """Call xAI Grok Vision (OpenAI-compatible)"""
+        if not openai:
+            raise ImportError("openai package not installed")
+
+        # xAI uses OpenAI-compatible API
+        base_url = self.base_url or "https://api.x.ai/v1"
+        client = openai.AsyncOpenAI(api_key=self.api_key, base_url=base_url)
+
+        # Encode image
+        base64_image = self.encode_image(image_path)
+
+        response = await client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500
+        )
+
+        text_response = response.choices[0].message.content
         return text_response, text_response
 
     async def test_vision_with_judge(self, media_id: int, image_path: str,

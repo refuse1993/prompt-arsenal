@@ -108,6 +108,58 @@ class PromptArsenal:
             except Exception:
                 pass  # Use defaults if config load fails
 
+    def _fetch_available_models(self, provider: str, api_key: str, base_url: str = None) -> list:
+        """실시간으로 사용 가능한 모델 조회"""
+        try:
+            if provider == "openai":
+                import openai
+                client = openai.OpenAI(api_key=api_key, base_url=base_url) if base_url else openai.OpenAI(api_key=api_key)
+                models = client.models.list()
+                return [{"id": m.id, "name": m.id, "created": m.created} for m in models.data]
+
+            elif provider == "anthropic":
+                # Anthropic은 공식 모델 리스트 API가 없음
+                # 하드코딩된 최신 모델 반환
+                return [
+                    {"id": "claude-opus-4.1", "name": "Claude Opus 4.1", "capabilities": ["text", "vision"]},
+                    {"id": "claude-sonnet-4.5", "name": "Claude Sonnet 4.5", "capabilities": ["text", "vision"]},
+                    {"id": "claude-haiku-4.5", "name": "Claude Haiku 4.5", "capabilities": ["text", "vision"]},
+                    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "capabilities": ["text", "vision"]},
+                    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "capabilities": ["text", "vision"]},
+                    {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet", "capabilities": ["text", "vision"]},
+                    {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku", "capabilities": ["text", "vision"]}
+                ]
+
+            elif provider == "google":
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                models = []
+                for m in genai.list_models():
+                    if 'generateContent' in m.supported_generation_methods:
+                        models.append({
+                            "id": m.name.split('/')[-1],
+                            "name": m.display_name,
+                            "capabilities": m.supported_generation_methods
+                        })
+                return models
+
+            elif provider == "xai":
+                # xAI Grok uses OpenAI-compatible API
+                import openai
+                client = openai.OpenAI(
+                    api_key=api_key,
+                    base_url=base_url or "https://api.x.ai/v1"
+                )
+                models = client.models.list()
+                return [{"id": m.id, "name": m.id, "created": m.created} for m in models.data]
+
+            else:
+                return []
+
+        except Exception as e:
+            console.print(f"[red]모델 조회 실패: {e}[/red]")
+            return []
+
     @property
     def image_attack(self):
         if self._image_attack is None:
@@ -441,21 +493,30 @@ class PromptArsenal:
             return
 
         table = Table(title="API Profiles")
+        table.add_column("No.", style="magenta", justify="right")
         table.add_column("Name", style="cyan")
         table.add_column("Provider", style="green")
         table.add_column("Model", style="yellow")
 
-        for name, profile in profiles.items():
-            table.add_row(name, profile['provider'], profile['model'])
+        profile_list = list(profiles.items())
+        for idx, (name, profile) in enumerate(profile_list, 1):
+            table.add_row(str(idx), name, profile['provider'], profile['model'])
 
         console.print(table)
 
-        profile_name = ask("프로필 선택")
-        if profile_name not in profiles:
-            console.print("[red]잘못된 프로필입니다.[/red]")
-            return
+        choice = ask(f"프로필 선택 (1-{len(profile_list)})", default="1")
 
-        profile = profiles[profile_name]
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(profile_list):
+                profile_name = profile_list[idx][0]
+                profile = profiles[profile_name]
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
 
         # Default prompts
         default_prompts = {
@@ -1050,21 +1111,30 @@ class PromptArsenal:
             return
 
         table = Table(title="API Profiles")
+        table.add_column("No.", style="magenta", justify="right")
         table.add_column("Name", style="cyan")
         table.add_column("Provider", style="green")
         table.add_column("Model", style="yellow")
 
-        for name, profile in profiles.items():
-            table.add_row(name, profile['provider'], profile['model'])
+        profile_list = list(profiles.items())
+        for idx, (name, profile) in enumerate(profile_list, 1):
+            table.add_row(str(idx), name, profile['provider'], profile['model'])
 
         console.print(table)
 
-        profile_name = ask("프로필 선택")
-        if profile_name not in profiles:
-            console.print("[red]잘못된 프로필입니다.[/red]")
-            return
+        choice = ask(f"프로필 선택 (1-{len(profile_list)})", default="1")
 
-        profile = profiles[profile_name]
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(profile_list):
+                profile_name = profile_list[idx][0]
+                profile = profiles[profile_name]
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
 
         # Select category
         categories = self.db.get_categories()
@@ -1072,11 +1142,23 @@ class PromptArsenal:
             console.print("[yellow]프롬프트가 없습니다.[/yellow]")
             return
 
-        console.print("\n사용 가능한 카테고리:")
-        for cat in categories:
-            console.print(f"  - {cat['category']} ({cat['count']}개)")
+        console.print("\n[bold]사용 가능한 카테고리:[/bold]")
+        for idx, cat in enumerate(categories, 1):
+            console.print(f"  [cyan]{idx}.[/cyan] {cat['category']} ({cat['count']}개)")
 
-        category = ask("\n카테고리 선택")
+        cat_choice = ask(f"\n카테고리 선택 (1-{len(categories)})", default="1")
+
+        try:
+            idx = int(cat_choice) - 1
+            if 0 <= idx < len(categories):
+                category = categories[idx]['category']
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
+
         limit = int(ask("테스트 개수", default="10"))
 
         # Create tester
@@ -1106,21 +1188,30 @@ class PromptArsenal:
             return
 
         table = Table(title="API Profiles")
+        table.add_column("No.", style="magenta", justify="right")
         table.add_column("Name", style="cyan")
         table.add_column("Provider", style="green")
         table.add_column("Model", style="yellow")
 
-        for name, profile in profiles.items():
-            table.add_row(name, profile['provider'], profile['model'])
+        profile_list = list(profiles.items())
+        for idx, (name, profile) in enumerate(profile_list, 1):
+            table.add_row(str(idx), name, profile['provider'], profile['model'])
 
         console.print(table)
 
-        profile_name = ask("프로필 선택")
-        if profile_name not in profiles:
-            console.print("[red]잘못된 프로필입니다.[/red]")
-            return
+        choice = ask(f"프로필 선택 (1-{len(profile_list)})", default="1")
 
-        profile = profiles[profile_name]
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(profile_list):
+                profile_name = profile_list[idx][0]
+                profile = profiles[profile_name]
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
 
         # Get media
         media = self.db.get_media(media_type='image', limit=10)
@@ -1129,21 +1220,27 @@ class PromptArsenal:
             return
 
         table = Table(title="Available Images")
-        table.add_column("ID", style="cyan")
+        table.add_column("No.", style="magenta", justify="right")
         table.add_column("Attack Type", style="yellow")
         table.add_column("File", style="white")
 
-        for m in media:
-            table.add_row(str(m['id']), m['attack_type'], m['generated_file'])
+        for idx, m in enumerate(media, 1):
+            table.add_row(str(idx), m['attack_type'], m['generated_file'])
 
         console.print(table)
 
-        media_id = int(ask("미디어 ID 선택"))
+        media_choice = ask(f"미디어 선택 (1-{len(media)})", default="1")
 
-        # Find selected media
-        selected = next((m for m in media if m['id'] == media_id), None)
-        if not selected:
-            console.print("[red]잘못된 ID입니다.[/red]")
+        try:
+            idx = int(media_choice) - 1
+            if 0 <= idx < len(media):
+                selected = media[idx]
+                media_id = selected['id']
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
             return
 
         # Create tester
@@ -1202,11 +1299,18 @@ class PromptArsenal:
         console.print(table)
 
         # Select media
-        media_id = int(ask("\n테스트할 미디어 ID 선택"))
-        selected = next((m for m in media if m['id'] == media_id), None)
+        media_choice = ask(f"\n테스트할 미디어 선택 (1-{len(media)})", default="1")
 
-        if not selected:
-            console.print("[red]잘못된 ID입니다.[/red]")
+        try:
+            idx = int(media_choice) - 1
+            if 0 <= idx < len(media):
+                selected = media[idx]
+                media_id = selected['id']
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
             return
 
         # Check if file exists
@@ -1222,21 +1326,30 @@ class PromptArsenal:
             return
 
         table = Table(title="API Profiles")
+        table.add_column("No.", style="magenta", justify="right")
         table.add_column("Name", style="cyan")
         table.add_column("Provider", style="green")
         table.add_column("Model", style="yellow")
 
-        for name, profile in profiles.items():
-            table.add_row(name, profile['provider'], profile['model'])
+        profile_list = list(profiles.items())
+        for idx, (name, profile) in enumerate(profile_list, 1):
+            table.add_row(str(idx), name, profile['provider'], profile['model'])
 
         console.print(table)
 
-        profile_name = ask("프로필 선택")
-        if profile_name not in profiles:
-            console.print("[red]잘못된 프로필입니다.[/red]")
-            return
+        choice = ask(f"프로필 선택 (1-{len(profile_list)})", default="1")
 
-        profile = profiles[profile_name]
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(profile_list):
+                profile_name = profile_list[idx][0]
+                profile = profiles[profile_name]
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
 
         # Custom prompt
         default_prompts = {
@@ -1314,21 +1427,30 @@ class PromptArsenal:
             return
 
         table = Table(title="API Profiles")
+        table.add_column("No.", style="magenta", justify="right")
         table.add_column("Name", style="cyan")
         table.add_column("Provider", style="green")
         table.add_column("Model", style="yellow")
 
-        for name, profile in profiles.items():
-            table.add_row(name, profile['provider'], profile['model'])
+        profile_list = list(profiles.items())
+        for idx, (name, profile) in enumerate(profile_list, 1):
+            table.add_row(str(idx), name, profile['provider'], profile['model'])
 
         console.print(table)
 
-        profile_name = ask("프로필 선택")
-        if profile_name not in profiles:
-            console.print("[red]잘못된 프로필입니다.[/red]")
-            return
+        choice = ask(f"프로필 선택 (1-{len(profile_list)})", default="1")
 
-        profile = profiles[profile_name]
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(profile_list):
+                profile_name = profile_list[idx][0]
+                profile = profiles[profile_name]
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
 
         # Select scan type
         console.print("\n스캔 유형:")
@@ -1649,82 +1771,110 @@ class PromptArsenal:
 
             console.print("\n[bold]Provider:[/bold]")
             console.print("  [cyan]1.[/cyan] OpenAI")
-            console.print("  [cyan]2.[/cyan] Anthropic")
-            console.print("  [cyan]3.[/cyan] Google")
-            console.print("  [cyan]4.[/cyan] Local (커스텀)")
+            console.print("  [cyan]2.[/cyan] Anthropic (Claude)")
+            console.print("  [cyan]3.[/cyan] Google (Gemini)")
+            console.print("  [cyan]4.[/cyan] xAI (Grok)")
+            console.print("  [cyan]5.[/cyan] Local (커스텀)")
 
-            provider_choice = ask("\n선택 (1-4)", default="1")
+            provider_choice = ask("\n선택 (1-5)", default="1")
             provider_map = {
                 "1": "openai",
                 "2": "anthropic",
                 "3": "google",
-                "4": "local"
+                "4": "xai",
+                "5": "local"
             }
             provider = provider_map.get(provider_choice, "openai")
 
-            # Provider별 최신 모델 목록 (2025년 기준)
-            model_choices = {
-                "openai": [
-                    "gpt-5",           # 2025 플래그십
-                    "gpt-5-mini",      # 효율성/속도
-                    "gpt-4.1",         # GPT-4 개선
-                    "gpt-4o",          # 기존 모델
-                    "gpt-4o-mini",
-                    "gpt-4-turbo",
-                    "gpt-3.5-turbo"
-                ],
-                "anthropic": [
-                    "claude-opus-4.1",              # 최고 성능
-                    "claude-sonnet-4.5",            # 속도/균형
-                    "claude-haiku-4.5",             # 가장 빠름
-                    "claude-3-5-sonnet-20241022",   # 기존 모델
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307"
-                ],
-                "google": [
-                    "gemini-2.5-pro",        # 플래그십/추론
-                    "gemini-2.5-flash",      # 속도/균형
-                    "gemini-2.5-flash-lite", # 고용량/고효율
-                    "gemini-1.5-pro",        # 기존 모델
-                    "gemini-1.5-flash"
-                ],
-                "local": ["custom"]
-            }
-
-            if provider in model_choices:
-                models = model_choices[provider]
-                console.print("\n[bold]Model:[/bold]")
-                for idx, m in enumerate(models, 1):
-                    console.print(f"  [cyan]{idx}.[/cyan] {m}")
-                console.print(f"  [cyan]{len(models)+1}.[/cyan] Custom (직접 입력)")
-
-                model_choice = ask(f"\n선택 (1-{len(models)+1})", default="1")
-
-                try:
-                    idx = int(model_choice)
-                    if 1 <= idx <= len(models):
-                        model = models[idx - 1]
-                    elif idx == len(models) + 1:
-                        model = ask("모델명 입력")
-                    else:
-                        console.print("[red]잘못된 선택입니다.[/red]")
-                        return
-                except ValueError:
-                    console.print("[red]숫자를 입력하세요.[/red]")
-                    return
-            else:
-                model = ask("Model")
-
-            # API Key를 password 형식으로 입력
+            # API Key를 먼저 입력 (실시간 조회에 필요)
             from getpass import getpass
-            api_key = getpass("API Key (입력 중 보이지 않음): ")
+            api_key = getpass("\nAPI Key (입력 중 보이지 않음): ")
 
-            # base_url (선택 사항)
-            use_base_url = confirm("Custom Base URL 사용? (로컬 LLM 등)", default=False)
+            if not api_key:
+                console.print("[red]API Key가 필요합니다.[/red]")
+                return
+
+            # base_url (xAI, Local 등에 필요)
             base_url = None
-            if use_base_url:
-                base_url = ask("Base URL (예: http://localhost:8000)")
+            if provider in ["xai", "local"]:
+                use_base_url = confirm("Base URL 입력? (xAI: https://api.x.ai/v1)", default=True)
+                if use_base_url:
+                    default_base_url = "https://api.x.ai/v1" if provider == "xai" else "http://localhost:8000"
+                    base_url = ask("Base URL", default=default_base_url)
+
+            # 실시간 모델 조회 or 수동 선택
+            fetch_models = confirm("\n실시간 모델 조회? (최신 모델 자동 표시)", default=True)
+
+            model = None
+
+            if fetch_models and provider != "local":
+                console.print(f"\n[yellow]⏳ {provider} 모델 조회 중...[/yellow]")
+                available_models = self._fetch_available_models(provider, api_key, base_url)
+
+                if available_models:
+                    console.print(f"\n[green]✓ {len(available_models)}개 모델 발견![/green]\n")
+
+                    table = Table(title=f"{provider.upper()} Available Models")
+                    table.add_column("No.", style="magenta", justify="right")
+                    table.add_column("Model ID", style="cyan")
+                    table.add_column("Name/Info", style="white")
+
+                    for idx, m in enumerate(available_models, 1):
+                        name_info = m.get('name', m['id'])
+                        if 'capabilities' in m:
+                            name_info += f" ({', '.join(m['capabilities'][:2])})"
+                        table.add_row(str(idx), m['id'], name_info)
+
+                    console.print(table)
+
+                    model_choice = ask(f"\n선택 (1-{len(available_models)})", default="1")
+
+                    try:
+                        idx = int(model_choice) - 1
+                        if 0 <= idx < len(available_models):
+                            model = available_models[idx]['id']
+                        else:
+                            console.print("[red]잘못된 선택입니다.[/red]")
+                            return
+                    except ValueError:
+                        console.print("[red]숫자를 입력하세요.[/red]")
+                        return
+                else:
+                    console.print("[yellow]⚠️  모델 조회 실패, 수동 입력으로 전환합니다.[/yellow]")
+
+            # 수동 선택 또는 조회 실패 시
+            if not model:
+                # Provider별 기본 모델 목록
+                model_choices = {
+                    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+                    "anthropic": ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-haiku-20240307"],
+                    "google": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+                    "xai": ["grok-2", "grok-2-mini"],
+                    "local": []
+                }
+
+                if provider in model_choices and model_choices[provider]:
+                    console.print("\n[bold]기본 모델 목록:[/bold]")
+                    for idx, m in enumerate(model_choices[provider], 1):
+                        console.print(f"  [cyan]{idx}.[/cyan] {m}")
+                    console.print(f"  [cyan]{len(model_choices[provider])+1}.[/cyan] 직접 입력")
+
+                    model_choice = ask(f"\n선택 (1-{len(model_choices[provider])+1})", default="1")
+
+                    try:
+                        idx = int(model_choice)
+                        if 1 <= idx <= len(model_choices[provider]):
+                            model = model_choices[provider][idx - 1]
+                        elif idx == len(model_choices[provider]) + 1:
+                            model = ask("모델명 입력")
+                        else:
+                            console.print("[red]잘못된 선택입니다.[/red]")
+                            return
+                    except ValueError:
+                        console.print("[red]숫자를 입력하세요.[/red]")
+                        return
+                else:
+                    model = ask("모델명 입력")
 
             self.config.add_profile(name, provider, model, api_key, base_url)
             console.print(f"\n[green]✅ '{name}' 프로필 추가 완료![/green]")

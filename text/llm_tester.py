@@ -59,6 +59,8 @@ class LLMTester:
                 response = await self._call_anthropic(prompt)
             elif self.provider == 'google':
                 response = await self._call_google(prompt)
+            elif self.provider == 'xai':
+                response = await self._call_xai(prompt)
             elif self.provider == 'local':
                 response = await self._call_local(prompt)
             else:
@@ -133,6 +135,24 @@ class LLMTester:
 
         response_text = await loop.run_in_executor(None, _generate)
         return response_text
+
+    async def _call_xai(self, prompt: str) -> str:
+        """Call xAI Grok API (OpenAI-compatible)"""
+        if not openai:
+            raise ImportError("openai package not installed")
+
+        # xAI uses OpenAI-compatible API
+        base_url = self.base_url or "https://api.x.ai/v1"
+        client = openai.AsyncOpenAI(api_key=self.api_key, base_url=base_url)
+
+        response = await client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=500
+        )
+
+        return response.choices[0].message.content
 
     async def _call_local(self, prompt: str) -> str:
         """Call local LLM API (OpenAI compatible)"""
