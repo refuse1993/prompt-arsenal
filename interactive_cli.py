@@ -312,19 +312,32 @@ class PromptArsenal:
         from text.github_importer import GitHubImporter
         importer = GitHubImporter(self.db)
 
-        # Show available datasets
+        # Show available datasets with numbers
         table = Table(title="Available Datasets")
+        table.add_column("No.", style="magenta", justify="right")
         table.add_column("Name", style="cyan")
         table.add_column("Description", style="white")
         table.add_column("Category", style="green")
 
-        for name, info in importer.DATASETS.items():
-            table.add_row(name, info['description'], info['category'])
+        dataset_list = list(importer.DATASETS.items())
+        for idx, (name, info) in enumerate(dataset_list, 1):
+            table.add_row(str(idx), name, info['description'], info['category'])
 
         console.print(table)
 
-        console.print("\n[dim]💡 'all' 입력 시 모든 데이터셋 가져오기[/dim]")
-        dataset_name = ask("\n가져올 데이터셋 이름 (또는 'all')")
+        console.print("\n[dim]💡 숫자 또는 이름 입력, 'all' 입력 시 모든 데이터셋 가져오기[/dim]")
+        choice = ask("\n선택 (번호/이름/all)", default="all")
+
+        # 숫자 선택 처리
+        if choice.isdigit():
+            idx = int(choice) - 1
+            if 0 <= idx < len(dataset_list):
+                dataset_name = dataset_list[idx][0]
+            else:
+                console.print("[red]잘못된 번호입니다.[/red]")
+                return
+        else:
+            dataset_name = choice
 
         # 전체 가져오기
         if dataset_name.lower() == 'all':
@@ -497,11 +510,24 @@ class PromptArsenal:
         """Generate multimodal attacks"""
         console.print("\n[bold yellow]멀티모달 공격 생성[/bold yellow]")
 
-        media_type = ask(
-            "미디어 타입",
-            choices=["image", "audio", "video"],
-            default="image"
-        )
+        console.print("\n[bold]미디어 타입:[/bold]")
+        console.print("  [cyan]1.[/cyan] 이미지 (image)")
+        console.print("  [cyan]2.[/cyan] 오디오 (audio)")
+        console.print("  [cyan]3.[/cyan] 비디오 (video)")
+        console.print("  [cyan]0.[/cyan] 취소")
+
+        choice = ask("\n선택 (0-3)", default="1")
+
+        media_type_map = {
+            "1": "image",
+            "2": "audio",
+            "3": "video",
+            "0": None
+        }
+        media_type = media_type_map.get(choice)
+
+        if not media_type:
+            return
 
         if media_type == "image":
             self._generate_image_attack()
@@ -533,7 +559,29 @@ class PromptArsenal:
 
         console.print(table)
 
-        attack_type = ask("공격 유형", choices=attack_types, default="visual_jailbreak")
+        # 숫자 선택 메뉴
+        console.print("\n[bold]공격 유형:[/bold]")
+        for idx, attack_type in enumerate(attack_types, 1):
+            desc = descriptions.get(attack_type, "")
+            console.print(f"  [cyan]{idx}.[/cyan] {attack_type} - {desc}")
+        console.print("  [cyan]0.[/cyan] 취소")
+
+        default_idx = str(attack_types.index("visual_jailbreak") + 1) if "visual_jailbreak" in attack_types else "1"
+        choice = ask(f"\n선택 (0-{len(attack_types)})", default=default_idx)
+
+        if choice == "0":
+            return
+
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(attack_types):
+                attack_type = attack_types[idx]
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+                return
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
 
         # 이미지 경로
         default_image = self.default_paths["image"]
@@ -1560,18 +1608,47 @@ class PromptArsenal:
         else:
             console.print("[yellow]⚠️  등록된 프로필이 없습니다.[/yellow]")
 
-        action = ask(
-            "\n작업 선택",
-            choices=["add", "edit", "delete", "set_default", "test", "cancel"],
-            default="cancel"
-        )
+        # 작업 목록 표시
+        console.print("\n[bold]작업 선택:[/bold]")
+        console.print("  [cyan]1.[/cyan] 프로필 추가 (add)")
+        console.print("  [cyan]2.[/cyan] 프로필 수정 (edit)")
+        console.print("  [cyan]3.[/cyan] 프로필 삭제 (delete)")
+        console.print("  [cyan]4.[/cyan] 기본 프로필 설정 (set_default)")
+        console.print("  [cyan]5.[/cyan] API 연결 테스트 (test)")
+        console.print("  [cyan]0.[/cyan] 취소 (cancel)")
+
+        choice = ask("\n선택 (0-5)", default="0")
+
+        # 숫자를 action으로 매핑
+        action_map = {
+            "1": "add",
+            "2": "edit",
+            "3": "delete",
+            "4": "set_default",
+            "5": "test",
+            "0": "cancel"
+        }
+        action = action_map.get(choice, "cancel")
 
         if action == "add":
             console.print("\n[cyan]🆕 새 프로필 추가[/cyan]")
 
             name = ask("프로필 이름 (예: openai-gpt4)")
 
-            provider = ask("Provider", choices=["openai", "anthropic", "google", "local"], default="openai")
+            console.print("\n[bold]Provider:[/bold]")
+            console.print("  [cyan]1.[/cyan] OpenAI")
+            console.print("  [cyan]2.[/cyan] Anthropic")
+            console.print("  [cyan]3.[/cyan] Google")
+            console.print("  [cyan]4.[/cyan] Local (커스텀)")
+
+            provider_choice = ask("\n선택 (1-4)", default="1")
+            provider_map = {
+                "1": "openai",
+                "2": "anthropic",
+                "3": "google",
+                "4": "local"
+            }
+            provider = provider_map.get(provider_choice, "openai")
 
             # Provider별 최신 모델 목록 (2025년 기준)
             model_choices = {
@@ -1604,9 +1681,26 @@ class PromptArsenal:
             }
 
             if provider in model_choices:
-                model = ask("Model", choices=model_choices[provider] + ["custom"], default=model_choices[provider][0])
-                if model == "custom":
-                    model = ask("모델명 입력")
+                models = model_choices[provider]
+                console.print("\n[bold]Model:[/bold]")
+                for idx, m in enumerate(models, 1):
+                    console.print(f"  [cyan]{idx}.[/cyan] {m}")
+                console.print(f"  [cyan]{len(models)+1}.[/cyan] Custom (직접 입력)")
+
+                model_choice = ask(f"\n선택 (1-{len(models)+1})", default="1")
+
+                try:
+                    idx = int(model_choice)
+                    if 1 <= idx <= len(models):
+                        model = models[idx - 1]
+                    elif idx == len(models) + 1:
+                        model = ask("모델명 입력")
+                    else:
+                        console.print("[red]잘못된 선택입니다.[/red]")
+                        return
+                except ValueError:
+                    console.print("[red]숫자를 입력하세요.[/red]")
+                    return
             else:
                 model = ask("Model")
 
@@ -1642,11 +1736,23 @@ class PromptArsenal:
             console.print(f"  Model: {current['model']}")
             console.print(f"  API Key: {'*' * 20}")
 
-            field = ask(
-                "\n수정할 항목",
-                choices=["model", "api_key", "base_url", "all", "cancel"],
-                default="cancel"
-            )
+            console.print("\n[bold]수정할 항목:[/bold]")
+            console.print("  [cyan]1.[/cyan] Model")
+            console.print("  [cyan]2.[/cyan] API Key")
+            console.print("  [cyan]3.[/cyan] Base URL")
+            console.print("  [cyan]4.[/cyan] 전체 (all)")
+            console.print("  [cyan]0.[/cyan] 취소 (cancel)")
+
+            field_choice = ask("\n선택 (0-4)", default="0")
+
+            field_map = {
+                "1": "model",
+                "2": "api_key",
+                "3": "base_url",
+                "4": "all",
+                "0": "cancel"
+            }
+            field = field_map.get(field_choice, "cancel")
 
             if field == "cancel":
                 return
