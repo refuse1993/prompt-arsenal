@@ -17,6 +17,11 @@ try:
 except ImportError:
     anthropic = None
 
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 import aiohttp
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -52,6 +57,8 @@ class LLMTester:
                 response = await self._call_openai(prompt)
             elif self.provider == 'anthropic':
                 response = await self._call_anthropic(prompt)
+            elif self.provider == 'google':
+                response = await self._call_google(prompt)
             elif self.provider == 'local':
                 response = await self._call_local(prompt)
             else:
@@ -104,6 +111,28 @@ class LLMTester:
         )
 
         return response.content[0].text
+
+    async def _call_google(self, prompt: str) -> str:
+        """Call Google Gemini API"""
+        if not genai:
+            raise ImportError("google-generativeai package not installed. Install with: pip install google-generativeai")
+
+        # Configure API key
+        genai.configure(api_key=self.api_key)
+
+        # Create model
+        model = genai.GenerativeModel(self.model)
+
+        # Generate response (synchronous, so we need to run it in executor)
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def _generate():
+            response = model.generate_content(prompt)
+            return response.text
+
+        response_text = await loop.run_in_executor(None, _generate)
+        return response_text
 
     async def _call_local(self, prompt: str) -> str:
         """Call local LLM API (OpenAI compatible)"""

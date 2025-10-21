@@ -1534,46 +1534,217 @@ class PromptArsenal:
 
     def settings_api_profiles(self):
         """Manage API profiles"""
-        console.print("\n[bold yellow]API 프로필 관리[/bold yellow]")
+        console.print("\n[bold yellow]⚙️  API 프로필 관리[/bold yellow]")
 
         profiles = self.config.get_all_profiles()
+        default_profile = self.config.config.get('default_profile', '')
 
         if profiles:
             table = Table(title="API Profiles")
             table.add_column("Name", style="cyan")
             table.add_column("Provider", style="green")
             table.add_column("Model", style="yellow")
+            table.add_column("Default", style="magenta", justify="center")
 
             for name, profile in profiles.items():
-                table.add_row(name, profile['provider'], profile['model'])
+                is_default = "★" if name == default_profile else ""
+                table.add_row(
+                    name,
+                    profile['provider'],
+                    profile['model'],
+                    is_default
+                )
 
             console.print(table)
+            console.print(f"\n[dim]💡 총 {len(profiles)}개 프로필 | 기본: {default_profile or '없음'}[/dim]")
+        else:
+            console.print("[yellow]⚠️  등록된 프로필이 없습니다.[/yellow]")
 
         action = ask(
-            "작업",
-            choices=["add", "delete", "set_default", "cancel"],
+            "\n작업 선택",
+            choices=["add", "edit", "delete", "set_default", "test", "cancel"],
             default="cancel"
         )
 
         if action == "add":
-            name = ask("프로필 이름")
-            provider = ask("Provider", choices=["openai", "anthropic"])
-            model = ask("Model")
-            api_key = ask("API Key")
+            console.print("\n[cyan]🆕 새 프로필 추가[/cyan]")
 
-            self.config.add_profile(name, provider, model, api_key)
-            console.print(f"[green]✓[/green] 프로필 '{name}' 추가됨")
+            name = ask("프로필 이름 (예: openai-gpt4)")
+
+            provider = ask("Provider", choices=["openai", "anthropic", "google", "local"], default="openai")
+
+            # Provider별 최신 모델 목록 (2025년 기준)
+            model_choices = {
+                "openai": [
+                    "gpt-5",           # 2025 플래그십
+                    "gpt-5-mini",      # 효율성/속도
+                    "gpt-4.1",         # GPT-4 개선
+                    "gpt-4o",          # 기존 모델
+                    "gpt-4o-mini",
+                    "gpt-4-turbo",
+                    "gpt-3.5-turbo"
+                ],
+                "anthropic": [
+                    "claude-opus-4.1",              # 최고 성능
+                    "claude-sonnet-4.5",            # 속도/균형
+                    "claude-haiku-4.5",             # 가장 빠름
+                    "claude-3-5-sonnet-20241022",   # 기존 모델
+                    "claude-3-opus-20240229",
+                    "claude-3-sonnet-20240229",
+                    "claude-3-haiku-20240307"
+                ],
+                "google": [
+                    "gemini-2.5-pro",        # 플래그십/추론
+                    "gemini-2.5-flash",      # 속도/균형
+                    "gemini-2.5-flash-lite", # 고용량/고효율
+                    "gemini-1.5-pro",        # 기존 모델
+                    "gemini-1.5-flash"
+                ],
+                "local": ["custom"]
+            }
+
+            if provider in model_choices:
+                model = ask("Model", choices=model_choices[provider] + ["custom"], default=model_choices[provider][0])
+                if model == "custom":
+                    model = ask("모델명 입력")
+            else:
+                model = ask("Model")
+
+            # API Key를 password 형식으로 입력
+            from getpass import getpass
+            api_key = getpass("API Key (입력 중 보이지 않음): ")
+
+            # base_url (선택 사항)
+            use_base_url = confirm("Custom Base URL 사용? (로컬 LLM 등)", default=False)
+            base_url = None
+            if use_base_url:
+                base_url = ask("Base URL (예: http://localhost:8000)")
+
+            self.config.add_profile(name, provider, model, api_key, base_url)
+            console.print(f"\n[green]✅ '{name}' 프로필 추가 완료![/green]")
+
+            # 첫 프로필이면 자동으로 기본 설정
+            if len(profiles) == 0:
+                self.config.set_default_profile(name)
+                console.print(f"[green]✅ '{name}'을 기본 프로필로 설정했습니다.[/green]")
+
+        elif action == "edit":
+            if not profiles:
+                console.print("[yellow]수정할 프로필이 없습니다.[/yellow]")
+                return
+
+            console.print("\n[cyan]✏️  프로필 수정[/cyan]")
+            name = ask("수정할 프로필 이름", choices=list(profiles.keys()))
+
+            current = profiles[name]
+            console.print(f"\n현재 설정:")
+            console.print(f"  Provider: {current['provider']}")
+            console.print(f"  Model: {current['model']}")
+            console.print(f"  API Key: {'*' * 20}")
+
+            field = ask(
+                "\n수정할 항목",
+                choices=["model", "api_key", "base_url", "all", "cancel"],
+                default="cancel"
+            )
+
+            if field == "cancel":
+                return
+
+            update_data = {}
+
+            if field in ["model", "all"]:
+                new_model = ask("새 Model", default=current['model'])
+                update_data['model'] = new_model
+
+            if field in ["api_key", "all"]:
+                from getpass import getpass
+                new_key = getpass("새 API Key (입력 중 보이지 않음): ")
+                if new_key:
+                    update_data['api_key'] = new_key
+
+            if field in ["base_url", "all"]:
+                new_base_url = ask("새 Base URL (비워두면 제거)", default=current.get('base_url', ''))
+                update_data['base_url'] = new_base_url if new_base_url else None
+
+            if update_data:
+                self.config.update_profile(name, **update_data)
+                console.print(f"\n[green]✅ '{name}' 프로필 수정 완료![/green]")
 
         elif action == "delete":
-            name = ask("삭제할 프로필 이름")
-            if confirm(f"'{name}' 프로필을 삭제하시겠습니까?"):
+            if not profiles:
+                console.print("[yellow]삭제할 프로필이 없습니다.[/yellow]")
+                return
+
+            console.print("\n[red]🗑️  프로필 삭제[/red]")
+            name = ask("삭제할 프로필", choices=list(profiles.keys()))
+
+            if confirm(f"'{name}' 프로필을 정말 삭제하시겠습니까?"):
                 self.config.delete_profile(name)
-                console.print(f"[green]✓[/green] 프로필 삭제됨")
+                console.print(f"[green]✅ '{name}' 프로필 삭제 완료[/green]")
+
+                # 기본 프로필이 삭제되면 초기화
+                if name == default_profile:
+                    self.config.config['default_profile'] = ''
+                    self.config.save_config()
+                    console.print("[yellow]⚠️  기본 프로필이 삭제되어 초기화되었습니다.[/yellow]")
 
         elif action == "set_default":
-            name = ask("기본 프로필로 설정할 이름")
+            if not profiles:
+                console.print("[yellow]프로필이 없습니다.[/yellow]")
+                return
+
+            console.print("\n[cyan]⭐ 기본 프로필 설정[/cyan]")
+            name = ask("기본 프로필", choices=list(profiles.keys()))
             self.config.set_default_profile(name)
-            console.print(f"[green]✓[/green] 기본 프로필 설정됨")
+            console.print(f"[green]✅ '{name}'을 기본 프로필로 설정했습니다.[/green]")
+
+        elif action == "test":
+            if not profiles:
+                console.print("[yellow]테스트할 프로필이 없습니다.[/yellow]")
+                return
+
+            console.print("\n[cyan]🧪 프로필 테스트[/cyan]")
+            name = ask("테스트할 프로필", choices=list(profiles.keys()))
+
+            profile = profiles[name]
+            console.print(f"\n[yellow]'{name}' 프로필 테스트 중...[/yellow]")
+
+            try:
+                import asyncio
+                from text.llm_tester import LLMTester
+
+                async def test_connection():
+                    tester = LLMTester(
+                        db=self.db,
+                        provider=profile['provider'],
+                        model=profile['model'],
+                        api_key=profile['api_key'],
+                        base_url=profile.get('base_url')
+                    )
+
+                    # 간단한 테스트 프롬프트
+                    test_prompt = "Say 'Hello' if you can read this."
+
+                    result = await tester.test_prompt(test_prompt)
+                    return result
+
+                result = asyncio.run(test_connection())
+
+                console.print(f"\n[green]✅ 연결 성공![/green]")
+                console.print(f"Provider: {profile['provider']}")
+                console.print(f"Model: {profile['model']}")
+                console.print(f"응답: {result.get('response', 'N/A')[:100]}...")
+                console.print(f"응답 시간: {result.get('response_time', 0):.2f}초")
+
+            except Exception as e:
+                console.print(f"\n[red]❌ 연결 실패: {e}[/red]")
+                console.print("\n[yellow]확인사항:[/yellow]")
+                console.print("  1. API Key가 올바른지 확인")
+                console.print("  2. 네트워크 연결 확인")
+                console.print("  3. Provider/Model 이름 확인")
+                if profile.get('base_url'):
+                    console.print(f"  4. Base URL 접근 가능 확인: {profile['base_url']}")
 
     def run(self):
         """Main application loop"""
