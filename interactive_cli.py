@@ -540,7 +540,8 @@ class PromptArsenal:
                     db=self.db,
                     provider=profile['provider'],
                     model=profile['model'],
-                    api_key=profile['api_key']
+                    api_key=profile['api_key'],
+                    base_url=profile.get('base_url')
                 )
 
                 result = asyncio.run(tester.test_vision_with_judge(
@@ -1372,7 +1373,8 @@ class PromptArsenal:
                     db=self.db,
                     provider=profile['provider'],
                     model=profile['model'],
-                    api_key=profile['api_key']
+                    api_key=profile['api_key'],
+                    base_url=profile.get('base_url')
                 )
 
                 result = asyncio.run(tester.test_vision_with_judge(
