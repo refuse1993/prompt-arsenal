@@ -87,6 +87,12 @@ class GitHubImporter:
             "format": "csv",
             "category": "harmful_content",
             "description": "AdvBench - 유해 콘텐츠 생성 유도"
+        },
+        "mm-safetybench": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/01-Illegal_Activitiy.csv",
+            "format": "csv",
+            "category": "multimodal_safety",
+            "description": "MM-SafetyBench - 멀티모달 안전성 벤치마크 (13개 카테고리)"
         }
     }
 
