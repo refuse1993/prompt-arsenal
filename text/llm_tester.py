@@ -22,6 +22,16 @@ try:
 except ImportError:
     genai = None
 
+try:
+    from huggingface_hub import InferenceClient
+except ImportError:
+    InferenceClient = None
+
+try:
+    import cohere
+except ImportError:
+    cohere = None
+
 import aiohttp
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -63,6 +73,16 @@ class LLMTester:
                 response = await self._call_xai(prompt)
             elif self.provider == 'local':
                 response = await self._call_local(prompt)
+            elif self.provider == 'huggingface':
+                response = await self._call_huggingface(prompt)
+            elif self.provider == 'ollama':
+                response = await self._call_ollama(prompt)
+            elif self.provider == 'together':
+                response = await self._call_together(prompt)
+            elif self.provider == 'replicate':
+                response = await self._call_replicate(prompt)
+            elif self.provider == 'cohere':
+                response = await self._call_cohere(prompt)
             else:
                 raise ValueError(f"Unknown provider: {self.provider}")
 
@@ -171,6 +191,135 @@ class LLMTester:
             ) as response:
                 data = await response.json()
                 return data['choices'][0]['message']['content']
+
+    async def _call_huggingface(self, prompt: str) -> str:
+        """Call Hugging Face Inference API"""
+        if not InferenceClient:
+            raise ImportError("huggingface_hub package not installed. Install with: pip install huggingface_hub")
+
+        if not self.api_key:
+            raise ValueError("API key required for Hugging Face")
+
+        # Use async executor for sync HF client
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def _generate():
+            client = InferenceClient(token=self.api_key)
+            response = client.text_generation(
+                prompt,
+                model=self.model,
+                max_new_tokens=500,
+                temperature=0.7
+            )
+            return response
+
+        response_text = await loop.run_in_executor(None, _generate)
+        return response_text
+
+    async def _call_ollama(self, prompt: str) -> str:
+        """Call Ollama API (local, OpenAI-compatible)"""
+        base_url = self.base_url or "http://localhost:11434"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{base_url}/v1/chat/completions",
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                    "max_tokens": 500
+                }
+            ) as response:
+                data = await response.json()
+                return data['choices'][0]['message']['content']
+
+    async def _call_together(self, prompt: str) -> str:
+        """Call Together AI API (OpenAI-compatible)"""
+        if not openai:
+            raise ImportError("openai package not installed")
+
+        if not self.api_key:
+            raise ValueError("API key required for Together AI")
+
+        # Together AI uses OpenAI-compatible API
+        base_url = self.base_url or "https://api.together.xyz/v1"
+        client = openai.AsyncOpenAI(api_key=self.api_key, base_url=base_url)
+
+        response = await client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=500
+        )
+
+        return response.choices[0].message.content
+
+    async def _call_replicate(self, prompt: str) -> str:
+        """Call Replicate API"""
+        if not self.api_key:
+            raise ValueError("API key required for Replicate")
+
+        # Use Replicate HTTP API directly
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Token {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            # Create prediction
+            async with session.post(
+                "https://api.replicate.com/v1/predictions",
+                headers=headers,
+                json={
+                    "version": self.model,
+                    "input": {"prompt": prompt, "max_length": 500}
+                }
+            ) as response:
+                prediction = await response.json()
+                prediction_id = prediction['id']
+
+            # Poll for result
+            import asyncio
+            for _ in range(30):  # 30 attempts, 1 second each
+                await asyncio.sleep(1)
+                async with session.get(
+                    f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                    headers=headers
+                ) as response:
+                    result = await response.json()
+                    if result['status'] == 'succeeded':
+                        output = result['output']
+                        return ''.join(output) if isinstance(output, list) else str(output)
+                    elif result['status'] == 'failed':
+                        raise Exception(f"Replicate prediction failed: {result.get('error')}")
+
+            raise Exception("Replicate prediction timed out")
+
+    async def _call_cohere(self, prompt: str) -> str:
+        """Call Cohere API"""
+        if not cohere:
+            raise ImportError("cohere package not installed. Install with: pip install cohere")
+
+        if not self.api_key:
+            raise ValueError("API key required for Cohere")
+
+        # Use async executor for sync Cohere client
+        import asyncio
+        loop = asyncio.get_event_loop()
+
+        def _generate():
+            co = cohere.Client(self.api_key)
+            response = co.generate(
+                model=self.model,
+                prompt=prompt,
+                max_tokens=500,
+                temperature=0.7
+            )
+            return response.generations[0].text
+
+        response_text = await loop.run_in_executor(None, _generate)
+        return response_text
 
     async def test_prompt_with_judge(self, prompt_id: int, prompt: str, judge) -> Dict:
         """Test prompt with judge evaluation"""

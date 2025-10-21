@@ -14,7 +14,25 @@ class GitHubImporter:
             "url": "https://raw.githubusercontent.com/verazuo/jailbreak_llms/main/data/prompts/jailbreak_prompts_2023_05_07.csv",
             "format": "csv",
             "category": "jailbreak",
-            "description": "Jailbreak LLMs - 대규모 jailbreak 프롬프트 (15,140개)"
+            "description": "Jailbreak LLMs - Jailbreak 프롬프트 (2023-05-07)"
+        },
+        "jailbreakchat-2023-12": {
+            "url": "https://raw.githubusercontent.com/verazuo/jailbreak_llms/main/data/prompts/jailbreak_prompts_2023_12_25.csv",
+            "format": "csv",
+            "category": "jailbreak",
+            "description": "Jailbreak LLMs - Jailbreak 프롬프트 (2023-12-25, 최신)"
+        },
+        "jailbreakchat-regular-05": {
+            "url": "https://raw.githubusercontent.com/verazuo/jailbreak_llms/main/data/prompts/regular_prompts_2023_05_07.csv",
+            "format": "csv",
+            "category": "prompt_injection",
+            "description": "Jailbreak LLMs - Regular 프롬프트 (2023-05-07)"
+        },
+        "jailbreakchat-regular-12": {
+            "url": "https://raw.githubusercontent.com/verazuo/jailbreak_llms/main/data/prompts/regular_prompts_2023_12_25.csv",
+            "format": "csv",
+            "category": "prompt_injection",
+            "description": "Jailbreak LLMs - Regular 프롬프트 (2023-12-25, 최신)"
         },
         "awesome-chatgpt-prompts": {
             "url": "https://raw.githubusercontent.com/f/awesome-chatgpt-prompts/main/prompts.csv",
@@ -88,11 +106,83 @@ class GitHubImporter:
             "category": "harmful_content",
             "description": "AdvBench - 유해 콘텐츠 생성 유도"
         },
-        "mm-safetybench": {
+        "mm-safetybench-01-illegal": {
             "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/01-Illegal_Activitiy.csv",
             "format": "csv",
-            "category": "multimodal_safety",
-            "description": "MM-SafetyBench - 멀티모달 안전성 벤치마크 (13개 카테고리)"
+            "category": "illegal_activity",
+            "description": "MM-SafetyBench - 불법 활동"
+        },
+        "mm-safetybench-02-hate": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/02-HateSpeech.csv",
+            "format": "csv",
+            "category": "hate_speech",
+            "description": "MM-SafetyBench - 혐오 발언"
+        },
+        "mm-safetybench-03-malware": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/03-Malware_Generation.csv",
+            "format": "csv",
+            "category": "malware_generation",
+            "description": "MM-SafetyBench - 악성코드 생성"
+        },
+        "mm-safetybench-04-physical": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/04-Physical_Harm.csv",
+            "format": "csv",
+            "category": "physical_harm",
+            "description": "MM-SafetyBench - 물리적 위해"
+        },
+        "mm-safetybench-05-economic": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/05-EconomicHarm.csv",
+            "format": "csv",
+            "category": "economic_harm",
+            "description": "MM-SafetyBench - 경제적 피해"
+        },
+        "mm-safetybench-06-fraud": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/06-Fraud.csv",
+            "format": "csv",
+            "category": "fraud",
+            "description": "MM-SafetyBench - 사기"
+        },
+        "mm-safetybench-07-sex": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/07-Sex.csv",
+            "format": "csv",
+            "category": "sexual_content",
+            "description": "MM-SafetyBench - 성적 콘텐츠"
+        },
+        "mm-safetybench-08-political": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/08-Political_Lobbying.csv",
+            "format": "csv",
+            "category": "political_lobbying",
+            "description": "MM-SafetyBench - 정치 로비"
+        },
+        "mm-safetybench-09-privacy": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/09-Privacy_Violence.csv",
+            "format": "csv",
+            "category": "privacy_violation",
+            "description": "MM-SafetyBench - 프라이버시 침해"
+        },
+        "mm-safetybench-10-legal": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/10-Legal_Opinion.csv",
+            "format": "csv",
+            "category": "legal_opinion",
+            "description": "MM-SafetyBench - 법률 의견"
+        },
+        "mm-safetybench-11-financial": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/11-Financial_Advice.csv",
+            "format": "csv",
+            "category": "financial_advice",
+            "description": "MM-SafetyBench - 금융 조언"
+        },
+        "mm-safetybench-12-health": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/12-Health_Consultation.csv",
+            "format": "csv",
+            "category": "health_consultation",
+            "description": "MM-SafetyBench - 건강 상담"
+        },
+        "mm-safetybench-13-gov": {
+            "url": "https://raw.githubusercontent.com/isXinLiu/MM-SafetyBench/main/data/processed_questions/13-Gov_Decision.csv",
+            "format": "csv",
+            "category": "gov_decision",
+            "description": "MM-SafetyBench - 정부 의사결정"
         }
     }
 
@@ -204,16 +294,27 @@ class GitHubImporter:
         skipped = 0
 
         for prompt in prompts:
-            prompt_id = self.db.insert_prompt(
-                category=prompt['category'],
-                payload=prompt['payload'],
-                description=prompt['description'],
-                source=prompt['source']
-            )
+            # 중복 체크 (insert_prompt 호출 전에 직접 체크)
+            import sqlite3
+            conn = sqlite3.connect(self.db.db_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT id FROM prompts WHERE payload = ?', (prompt['payload'],))
+            existing = cursor.fetchone()
+            conn.close()
 
-            # 새로 추가된 경우만 카운트 (중복이면 기존 ID 반환됨)
-            if prompt_id:
-                count += 1
+            if existing:
+                # 중복 - 스킵
+                skipped += 1
+            else:
+                # 새 프롬프트 - 추가
+                prompt_id = self.db.insert_prompt(
+                    category=prompt['category'],
+                    payload=prompt['payload'],
+                    description=prompt['description'],
+                    source=prompt['source']
+                )
+                if prompt_id:
+                    count += 1
 
         return count
 
