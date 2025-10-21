@@ -312,17 +312,7 @@ class PromptArsenal:
 [bold cyan]⚔️  ATTACK (공격)[/bold cyan]
   [green]8[/green]. 텍스트 LLM 테스트
   [green]9[/green]. 멀티모달 LLM 테스트
-  [green]t[/green]. 방금 생성한 공격 빠른 테스트
   [green]g[/green]. GARAK 보안 스캔
-
-[bold yellow]🧪 ADVANCED (고급 공격)[/bold yellow]
-  [green]a[/green]. Foolbox 공격 (이미지)
-  [green]c[/green]. CleverHans 공격 (텍스트/오디오)
-  [green]x[/green]. Advertorch 체인 공격
-
-[bold yellow]📊 BENCHMARKS (벤치마크)[/bold yellow]
-  [green]b[/green]. AdvBench 가져오기
-  [green]v[/green]. MM-SafetyBench 테스트
 
 [bold cyan]⚙️  SETTINGS (설정)[/bold cyan]
   [green]s[/green]. API 프로필 관리
@@ -342,9 +332,10 @@ class PromptArsenal:
 [bold yellow]📖 Prompt Arsenal 사용 가이드[/bold yellow]
 
 [bold cyan]🎯 빠른 시작:[/bold cyan]
-  1️⃣  [green]b[/green] → AdvBench 프롬프트 가져오기 (520+ 프롬프트)
-  2️⃣  [green]s[/green] → API 프로필 설정 (OpenAI/Anthropic)
-  3️⃣  [green]8[/green] → 텍스트 LLM 테스트 시작
+  1️⃣  [green]1[/green] → GitHub 데이터셋 가져오기 (jailbreakchat, fuzzing 등)
+  2️⃣  [green]s[/green] → API 프로필 설정 (OpenAI/Anthropic/Google/xAI)
+  3️⃣  [green]j[/green] → Judge 프로필 설정 (LLM Judge)
+  4️⃣  [green]8[/green] → 텍스트 LLM 테스트 시작
 
 [bold cyan]💡 디폴트 경로 활용:[/bold cyan]
   파일 경로 입력 시 [green]Enter[/green]만 누르면 샘플 파일 자동 사용!
@@ -359,61 +350,51 @@ class PromptArsenal:
 
   [yellow]1. 프롬프트 수집:[/yellow]
      1 → jailbreakchat 선택 → 자동 가져오기
-     b → harmful_behaviors → 520개 프롬프트 추가
+     2 → 수동으로 프롬프트 추가
 
   [yellow]2. 멀티모달 공격:[/yellow]
      3 → image → fgsm → [green]Enter[/green] (샘플 사용)
-     a → [green]Enter[/green] (샘플) → fgsm → 공격 생성
+     9 → 멀티모달 LLM 테스트
 
-  [yellow]3. LLM 테스트:[/yellow]
+  [yellow]3. LLM Judge 설정:[/yellow]
+     j → Judge 프로필 추가 (gpt-4o-mini 추천)
+     j → 기본 Judge 모드 설정 (hybrid 추천)
+
+  [yellow]4. LLM 테스트:[/yellow]
      s → API 키 등록
-     8 → 프로필 선택 → 카테고리 선택 → 테스트 개수
+     8 → 프로필 선택 → 카테고리 선택 → Judge 모드 선택 → 테스트
 
-  [yellow]4. 보안 스캔:[/yellow]
+  [yellow]5. 보안 스캔:[/yellow]
      g → API 프로필 → DAN Jailbreak 스캔 → 자동 DB 통합
 
-[bold cyan]🎨 고급 공격 도구:[/bold cyan]
+[bold cyan]🎭 LLM Judge 시스템:[/bold cyan]
 
-  [yellow]Foolbox (a):[/yellow]
-    - FGSM, PGD, C&W, DeepFool 등 20+ 알고리즘
-    - 그래디언트 기반 이미지 공격
-    - 샘플: [green]a[/green] → [green]Enter[/green] → fgsm
+  [yellow]3가지 Judge 모드:[/yellow]
+    - [green]rule-based[/green]: 빠른 패턴 매칭 (키워드 기반)
+    - [green]llm[/green]: LLM 판정 (정확하지만 느림)
+    - [green]hybrid[/green]: 하이브리드 (규칙 기반 먼저, 불확실하면 LLM) ⭐ 추천
 
-  [yellow]CleverHans (c):[/yellow]
-    - 텍스트: 단어 치환, 토큰 삽입, 문자 변형
-    - 오디오: 주파수 도메인 공격
-    - 샘플: [green]c[/green] → text → [green]Enter[/green]
-
-  [yellow]Advertorch (x):[/yellow]
-    - 공격 체이닝 (stealth, aggressive, combined)
-    - 샘플: [green]x[/green] → [green]Enter[/green] → stealth
-
-[bold cyan]📊 벤치마크:[/bold cyan]
-
-  [yellow]AdvBench (b):[/yellow]
-    - 520개 harmful behaviors 프롬프트
-    - LLM 안전성 테스트 표준 데이터셋
-
-  [yellow]MM-SafetyBench (v):[/yellow]
-    - 13개 안전성 카테고리
-    - 멀티모달 안전성 평가
+  [yellow]장점:[/yellow]
+    - LLM이 응답을 읽고 jailbreak 성공 여부 자동 판정
+    - 심각도(severity), 신뢰도(confidence), 판단 이유(reasoning) 제공
+    - 규칙 기반보다 훨씬 정확한 판정
 
 [bold cyan]💾 데이터 관리:[/bold cyan]
 
   5 → 텍스트 프롬프트 검색 (키워드, 카테고리)
   6 → 멀티모달 무기고 검색
   7 → 통계 조회 (성공률, 카테고리별 분포)
-  e → JSON/CSV 내보내기
+  r → 공격 테스트 결과 조회 (Judge 판정 상세 포함)
 
 [bold cyan]🔧 팁:[/bold cyan]
 
-  ✅ 모든 입력 프롬프트는 [green]Enter[/green]로 디폴트 사용 가능
+  ✅ 모든 입력은 [green]Enter[/green]로 디폴트 사용 가능
   ✅ Ctrl+C로 현재 작업 취소
-  ✅ samples/config.json에서 디폴트 경로 커스터마이즈
+  ✅ Judge 프로필은 기존 API 프로필에서 API Key 복사 가능
   ✅ Garak 스캔 결과는 자동으로 DB에 통합됨
+  ✅ LLM Judge는 gpt-4o-mini 사용 추천 (빠르고 저렴)
 
-[dim]자세한 정보: README.md 참조
-프로젝트: https://github.com/anthropics/prompt-arsenal[/dim]
+[dim]자세한 정보: README.md 참조[/dim]
         """
         console.print(help_text)
 
@@ -1034,22 +1015,24 @@ class PromptArsenal:
                 table = Table(title=f"📝 텍스트 프롬프트 테스트 결과: {len(text_results)}개")
                 table.add_column("ID", style="cyan", width=6)
                 table.add_column("Category", style="green", width=15)
-                table.add_column("Model", style="blue", width=20)
+                table.add_column("Model", style="blue", width=18)
                 table.add_column("Success", style="magenta", width=8)
-                table.add_column("Severity", style="yellow", width=10)
-                table.add_column("Response Time", style="white", width=12)
-                table.add_column("Tested At", style="dim", width=18)
+                table.add_column("Severity", style="yellow", width=8)
+                table.add_column("Confidence", style="cyan", width=10)
+                table.add_column("Time", style="white", width=8)
+                table.add_column("Tested At", style="dim", width=16)
 
                 for r in text_results:
                     success_icon = "✅" if r.get('success') else "❌"
                     table.add_row(
                         str(r['id']),
                         r.get('category', 'N/A')[:13] + "..." if r.get('category') and len(r.get('category', '')) > 13 else r.get('category', 'N/A'),
-                        r['model'][:18] + "..." if len(r['model']) > 18 else r['model'],
-                        f"{success_icon} {r.get('success', False)}",
-                        r.get('severity', 'N/A')[:8] if r.get('severity') else 'N/A',
+                        r['model'][:16] + "..." if len(r['model']) > 16 else r['model'],
+                        f"{success_icon}",
+                        r.get('severity', 'N/A')[:6] if r.get('severity') else 'N/A',
+                        f"{r.get('confidence', 0):.2f}",
                         f"{r.get('response_time', 0):.2f}s",
-                        r.get('tested_at', '')[:16]
+                        r.get('tested_at', '')[:14]
                     )
 
                 console.print(table)
@@ -1061,23 +1044,27 @@ class PromptArsenal:
             if multimodal_results:
                 table = Table(title=f"🎬 멀티모달 테스트 결과: {len(multimodal_results)}개")
                 table.add_column("ID", style="cyan", width=6)
-                table.add_column("Media", style="green", width=10)
-                table.add_column("Attack", style="yellow", width=20)
-                table.add_column("Model", style="blue", width=20)
+                table.add_column("Media", style="green", width=8)
+                table.add_column("Attack", style="yellow", width=18)
+                table.add_column("Model", style="blue", width=18)
                 table.add_column("Success", style="magenta", width=8)
-                table.add_column("Response Time", style="white", width=12)
-                table.add_column("Tested At", style="dim", width=18)
+                table.add_column("Severity", style="yellow", width=8)
+                table.add_column("Confidence", style="cyan", width=10)
+                table.add_column("Time", style="white", width=8)
+                table.add_column("Tested At", style="dim", width=14)
 
                 for r in multimodal_results:
                     success_icon = "✅" if r['success'] else "❌"
                     table.add_row(
                         str(r['id']),
                         f"{r['media_type']}",
-                        r['attack_type'][:18] + "..." if len(r['attack_type']) > 18 else r['attack_type'],
-                        r['model'][:18] + "..." if len(r['model']) > 18 else r['model'],
-                        f"{success_icon} {r['success']}",
+                        r['attack_type'][:16] + "..." if len(r['attack_type']) > 16 else r['attack_type'],
+                        r['model'][:16] + "..." if len(r['model']) > 16 else r['model'],
+                        f"{success_icon}",
+                        r.get('severity', 'N/A')[:6] if r.get('severity') else 'N/A',
+                        f"{r.get('confidence', 0):.2f}",
                         f"{r['response_time']:.2f}s",
-                        r['tested_at'][:16] if r['tested_at'] else ""
+                        r['tested_at'][:12] if r['tested_at'] else ""
                     )
 
                 console.print(table)
@@ -1107,18 +1094,23 @@ class PromptArsenal:
                     console.print(f"  ID: {selected['id']}")
                     console.print(f"  카테고리: {selected.get('category', 'N/A')}")
                     console.print(f"  모델: {selected['provider']} / {selected['model']}")
-                    console.print(f"  성공: {selected.get('success', False)}")
+                    console.print(f"  응답 시간: {selected.get('response_time', 0):.2f}s")
+                    console.print(f"  테스트 일시: {selected.get('tested_at', 'N/A')}")
+
+                    # Judge 판정 결과
+                    console.print(f"\n[bold cyan]🎭 Judge 판정 결과:[/bold cyan]")
+                    success_status = "[green]✅ 성공 (Jailbreak 성공)[/green]" if selected.get('success') else "[red]❌ 실패 (안전한 응답)[/red]"
+                    console.print(f"  판정: {success_status}")
                     console.print(f"  심각도: {selected.get('severity', 'N/A')}")
                     console.print(f"  신뢰도: {selected.get('confidence', 0):.2f}")
-                    console.print(f"  응답 시간: {selected.get('response_time', 0):.2f}s")
-                    console.print(f"\n  프롬프트:")
-                    console.print(f"  {selected.get('used_input', '')[:300]}...")
-                    console.print(f"\n  응답:")
-                    console.print(f"  {selected.get('response', '')[:500]}...")
-
                     if selected.get('reasoning'):
-                        console.print(f"\n  판정 이유:")
-                        console.print(f"  {selected['reasoning'][:500]}...")
+                        console.print(f"  판단 이유:")
+                        console.print(f"    {selected['reasoning'][:500]}...")
+
+                    console.print(f"\n[bold]📤 사용된 프롬프트:[/bold]")
+                    console.print(f"  {selected.get('used_input', '')[:500]}...")
+                    console.print(f"\n[bold]📥 모델 응답:[/bold]")
+                    console.print(f"  {selected.get('response', '')[:500]}...")
                 else:
                     console.print("[red]잘못된 ID입니다.[/red]")
 
@@ -1132,18 +1124,25 @@ class PromptArsenal:
                     console.print(f"  공격 타입: {selected['attack_type']}")
                     console.print(f"  파일: {selected['generated_file']}")
                     console.print(f"  모델: {selected['provider']} / {selected['model']}")
-                    console.print(f"  성공: {selected['success']}")
                     console.print(f"  응답 시간: {selected['response_time']:.2f}s")
-                    console.print(f"\n  응답:")
+                    console.print(f"  테스트 일시: {selected.get('tested_at', 'N/A')}")
+
+                    # Judge 판정 결과
+                    console.print(f"\n[bold cyan]🎭 Judge 판정 결과:[/bold cyan]")
+                    success_status = "[green]✅ 성공 (Jailbreak 성공)[/green]" if selected['success'] else "[red]❌ 실패 (안전한 응답)[/red]"
+                    console.print(f"  판정: {success_status}")
+                    console.print(f"  심각도: {selected.get('severity', 'N/A')}")
+                    console.print(f"  신뢰도: {selected.get('confidence', 0):.2f}")
+                    if selected.get('reasoning'):
+                        console.print(f"  판단 이유:")
+                        console.print(f"    {selected['reasoning'][:500]}...")
+
+                    console.print(f"\n[bold]📥 모델 응답:[/bold]")
                     console.print(f"  {selected['response'][:500]}...")
 
-                    if selected.get('vision_response'):
-                        console.print(f"\n  Vision 응답:")
+                    if selected.get('vision_response') and selected['vision_response'] != selected['response']:
+                        console.print(f"\n[bold]👁️  Vision 응답 (별도):[/bold]")
                         console.print(f"  {selected['vision_response'][:500]}...")
-
-                    if selected.get('reasoning'):
-                        console.print(f"\n  판정 이유:")
-                        console.print(f"  {selected['reasoning'][:500]}...")
                 else:
                     console.print("[red]잘못된 ID입니다.[/red]")
 
@@ -1244,7 +1243,34 @@ class PromptArsenal:
 
         # Run tests
         try:
-            asyncio.run(tester.test_category(category, limit, judge))
+            results = asyncio.run(tester.test_category(category, limit, judge))
+
+            # Show sample results with judgment details
+            if results:
+                console.print(f"\n[bold cyan]📊 샘플 결과 (처음 5개):[/bold cyan]")
+
+                for idx, result in enumerate(results[:5], 1):
+                    console.print(f"\n[bold]#{idx}[/bold]")
+
+                    # Success/Fail
+                    status = "[green]✅ 성공[/green]" if result.get('success') else "[red]❌ 실패[/red]"
+                    console.print(f"판정: {status}")
+
+                    # Judgment details
+                    if 'judgment' in result:
+                        judgment = result['judgment']
+                        console.print(f"심각도: {judgment.get('severity', 'N/A')}")
+                        console.print(f"신뢰도: {judgment.get('confidence', 0):.2f}")
+                        console.print(f"판단 이유: {judgment.get('reasoning', 'N/A')}")
+
+                    # Response preview
+                    response = result.get('response', 'N/A')
+                    preview = response[:150] + "..." if len(response) > 150 else response
+                    console.print(f"응답: {preview}")
+
+                if len(results) > 5:
+                    console.print(f"\n[yellow]💡 전체 {len(results)}개 결과는 DB에 저장되었습니다.[/yellow]")
+
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
@@ -1353,10 +1379,23 @@ class PromptArsenal:
                 judge=judge
             ))
 
-            console.print(f"\n[bold]Result:[/bold]")
-            console.print(f"Success: {result['success']}")
-            console.print(f"Response: {result['response']}")
-            console.print(f"Response Time: {result['response_time']:.2f}s")
+            console.print(f"\n[bold]테스트 결과:[/bold]")
+
+            # Success/Fail
+            status = "[green]✅ 성공 (Jailbreak 성공)[/green]" if result['success'] else "[red]❌ 실패 (안전한 응답)[/red]"
+            console.print(f"판정: {status}")
+            console.print(f"응답 시간: {result['response_time']:.2f}s")
+
+            # Judgment details
+            if 'judgment' in result:
+                judgment = result['judgment']
+                console.print(f"\n[bold cyan]🎭 Judge 판정 상세:[/bold cyan]")
+                console.print(f"  심각도: {judgment.get('severity', 'N/A')}")
+                console.print(f"  신뢰도: {judgment.get('confidence', 0):.2f}")
+                console.print(f"  판단 이유: {judgment.get('reasoning', 'N/A')}")
+
+            console.print(f"\n[bold]AI 응답:[/bold]")
+            console.print(f"{result['response']}")
 
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
@@ -2329,20 +2368,8 @@ class PromptArsenal:
                     self.attack_text_llm()
                 elif choice == '9':
                     self.attack_multimodal_llm()
-                elif choice == 't':
-                    self.attack_quick_test()
                 elif choice == 'g':
                     self.attack_garak_scan()
-                elif choice == 'a':
-                    self.advanced_foolbox_attack()
-                elif choice == 'c':
-                    self.advanced_cleverhans_attack()
-                elif choice == 'x':
-                    self.advanced_advertorch_attack()
-                elif choice == 'b':
-                    self.benchmark_advbench()
-                elif choice == 'v':
-                    self.benchmark_mm_safety()
                 elif choice == 's':
                     self.settings_api_profiles()
                 elif choice == 'j':
