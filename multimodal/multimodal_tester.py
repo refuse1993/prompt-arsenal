@@ -235,8 +235,25 @@ class MultimodalTester:
         result = await self.test_vision(media_id, image_path, prompt)
 
         if result.success:
-            # Evaluate with judge
-            judgment = judge.judge_response(prompt, result.response)
+            # Evaluate with judge (supports both sync and async judge)
+            if hasattr(judge, 'judge') and asyncio.iscoroutinefunction(judge.judge):
+                # HybridJudge (async)
+                judgment_result = await judge.judge(prompt, result.response)
+                judgment = {
+                    'success': judgment_result.success,
+                    'severity': judgment_result.severity,
+                    'confidence': judgment_result.confidence,
+                    'reasoning': judgment_result.reasoning
+                }
+            else:
+                # JudgeSystem (sync)
+                judgment_result = judge.evaluate(prompt, result.response)
+                judgment = {
+                    'success': judgment_result.success,
+                    'severity': judgment_result.severity.value,
+                    'confidence': judgment_result.confidence,
+                    'reasoning': judgment_result.reasoning
+                }
 
             # Save to database
             self.db.insert_multimodal_test_result(
