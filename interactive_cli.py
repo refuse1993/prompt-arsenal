@@ -131,8 +131,10 @@ class PromptArsenal:
             console.print("[yellow]💡 'j' 메뉴에서 Judge 프로필을 추가하세요.[/yellow]")
             return Judge()
 
-        if not default_judge_profile or default_judge_profile not in judge_profiles:
+        # 빈 문자열도 유효한 프로필 이름일 수 있음
+        if default_judge_profile is None or default_judge_profile not in judge_profiles:
             console.print("[yellow]⚠️  기본 Judge 프로필이 설정되지 않았습니다. rule-based로 진행합니다.[/yellow]")
+            console.print(f"[yellow]💡 사용 가능한 Judge 프로필: {list(judge_profiles.keys())}[/yellow]")
             return Judge()
 
         # LLM Judge 생성
@@ -1901,6 +1903,11 @@ class PromptArsenal:
 
             name = ask("프로필 이름 (예: openai-gpt4)")
 
+            # Validation: 빈 문자열 방지
+            if not name or name.strip() == "":
+                console.print("[red]프로필 이름은 빈 문자열일 수 없습니다.[/red]")
+                return
+
             console.print("\n[bold]Provider:[/bold]")
             console.print("  [cyan]1.[/cyan] OpenAI")
             console.print("  [cyan]2.[/cyan] Anthropic (Claude)")
@@ -2196,6 +2203,11 @@ class PromptArsenal:
             console.print("[yellow]   예: gpt-4o-mini로 테스트, gpt-4o로 판정[/yellow]\n")
 
             name = ask("프로필 이름 (예: gpt4-judge)")
+
+            # Validation: 빈 문자열 방지
+            if not name or name.strip() == "":
+                console.print("[red]프로필 이름은 빈 문자열일 수 없습니다.[/red]")
+                return
 
             if name in judge_profiles:
                 console.print(f"[red]'{name}' 프로필이 이미 존재합니다.[/red]")
