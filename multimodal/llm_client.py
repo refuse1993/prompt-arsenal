@@ -143,6 +143,10 @@ class MultimodalLLMClient(LLMClient):
     - Gemini Pro Vision
     """
 
+    def __init__(self, provider: str, model: str, api_key: str, base_url: str = None):
+        super().__init__(provider, model, api_key, base_url=base_url)
+        self.conversation_history = []  # Track conversation for multi-turn
+
     async def send(self, text: str) -> str:
         """
         Send text-only message (for compatibility)
@@ -154,6 +158,18 @@ class MultimodalLLMClient(LLMClient):
             Response text
         """
         return await self.generate(text)
+
+    def add_to_history(self, role: str, content: str):
+        """Add message to conversation history"""
+        self.conversation_history.append({"role": role, "content": content})
+
+    def clear_history(self):
+        """Clear conversation history"""
+        self.conversation_history = []
+
+    def get_history(self) -> List[Dict]:
+        """Get conversation history"""
+        return self.conversation_history.copy()
 
     async def generate_multimodal(
         self,
@@ -194,19 +210,26 @@ class MultimodalLLMClient(LLMClient):
         system: str = None,
         **kwargs
     ) -> str:
-        """Call OpenAI GPT-4 Vision"""
+        """Call OpenAI GPT-4 Vision with conversation history"""
         try:
             import openai
             import base64
 
             client = openai.AsyncOpenAI(api_key=self.api_key)
 
-            # Build messages
+            # Build messages from conversation history
             messages = []
+
+            # Add system message
             if system:
                 messages.append({"role": "system", "content": system})
 
-            # Build multimodal content
+            # Add conversation history (excluding system messages)
+            for msg in self.conversation_history:
+                if msg.get("role") != "system":
+                    messages.append(msg)
+
+            # Build multimodal content for current turn
             content = []
 
             # Add text
@@ -236,6 +259,7 @@ class MultimodalLLMClient(LLMClient):
                         }
                     })
 
+            # Add current user message
             messages.append({"role": "user", "content": content})
 
             # API call
@@ -246,7 +270,13 @@ class MultimodalLLMClient(LLMClient):
                 max_tokens=kwargs.get('max_tokens', 2000)
             )
 
-            return response.choices[0].message.content
+            response_text = response.choices[0].message.content
+
+            # Add to conversation history
+            self.conversation_history.append({"role": "user", "content": content})
+            self.conversation_history.append({"role": "assistant", "content": response_text})
+
+            return response_text
 
         except Exception as e:
             print(f"OpenAI Vision API error: {e}")
@@ -259,14 +289,22 @@ class MultimodalLLMClient(LLMClient):
         system: str = None,
         **kwargs
     ) -> str:
-        """Call Anthropic Claude 3 with vision"""
+        """Call Anthropic Claude 3 with vision and conversation history"""
         try:
             import anthropic
             import base64
 
             client = anthropic.AsyncAnthropic(api_key=self.api_key)
 
-            # Build content
+            # Build messages from conversation history
+            messages = []
+
+            # Add conversation history (excluding system messages)
+            for msg in self.conversation_history:
+                if msg.get("role") != "system":
+                    messages.append(msg)
+
+            # Build multimodal content for current turn
             content = []
 
             # Add images first
@@ -297,18 +335,25 @@ class MultimodalLLMClient(LLMClient):
             # Add text
             content.append({"type": "text", "text": text})
 
+            # Add current user message
+            messages.append({"role": "user", "content": content})
+
             # API call
             response = await client.messages.create(
                 model=self.model,
                 max_tokens=kwargs.get('max_tokens', 2000),
                 system=system if system else anthropic.NOT_GIVEN,
-                messages=[
-                    {"role": "user", "content": content}
-                ],
+                messages=messages,
                 temperature=kwargs.get('temperature', 0.7)
             )
 
-            return response.content[0].text
+            response_text = response.content[0].text
+
+            # Add to conversation history
+            self.conversation_history.append({"role": "user", "content": content})
+            self.conversation_history.append({"role": "assistant", "content": response_text})
+
+            return response_text
 
         except Exception as e:
             print(f"Anthropic Vision API error: {e}")
@@ -321,7 +366,7 @@ class MultimodalLLMClient(LLMClient):
         system: str = None,
         **kwargs
     ) -> str:
-        """Call Google Gemini with vision"""
+        """Call Google Gemini with vision and conversation history"""
         try:
             import google.generativeai as genai
             from PIL import Image as PILImage
@@ -334,7 +379,41 @@ class MultimodalLLMClient(LLMClient):
                 system_instruction=system if system else None
             )
 
-            # Build content
+            # Convert conversation history to Gemini format
+            gemini_history = []
+            for msg in self.conversation_history:
+                role = msg.get("role")
+                content = msg.get("content")
+
+                # Convert role name (Gemini uses "model" instead of "assistant")
+                gemini_role = "model" if role == "assistant" else role
+
+                # Handle different content formats
+                if isinstance(content, str):
+                    # Simple text message
+                    gemini_history.append({
+                        "role": gemini_role,
+                        "parts": [content]
+                    })
+                elif isinstance(content, list):
+                    # Multimodal content (from OpenAI/Anthropic format)
+                    parts = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            if item.get("type") == "text":
+                                parts.append(item.get("text", ""))
+                            # Note: Images are already in history as base64,
+                            # Gemini doesn't support this in history reconstruction
+                            # Skip image parts in history
+                        elif isinstance(item, str):
+                            parts.append(item)
+                    if parts:
+                        gemini_history.append({
+                            "role": gemini_role,
+                            "parts": parts
+                        })
+
+            # Build content for current turn
             content = [text]
 
             # Add images
@@ -343,9 +422,12 @@ class MultimodalLLMClient(LLMClient):
                     img = PILImage.open(img_path)
                     content.append(img)
 
-            # Generate
+            # Start chat with history
+            chat = model.start_chat(history=gemini_history)
+
+            # Send current message
             response = await asyncio.to_thread(
-                model.generate_content,
+                chat.send_message,
                 content,
                 generation_config={
                     'temperature': kwargs.get('temperature', 0.7),
@@ -353,7 +435,18 @@ class MultimodalLLMClient(LLMClient):
                 }
             )
 
-            return response.text
+            response_text = response.text
+
+            # Add to conversation history (store in unified format)
+            # For images, we store the text + image reference
+            user_content = [text]
+            if images:
+                user_content.extend([f"[Image: {os.path.basename(img)}]" for img in images])
+
+            self.conversation_history.append({"role": "user", "content": " ".join(user_content)})
+            self.conversation_history.append({"role": "assistant", "content": response_text})
+
+            return response_text
 
         except Exception as e:
             print(f"Google Vision API error: {e}")

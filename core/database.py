@@ -114,6 +114,7 @@ class ArsenalDB:
                 target_provider TEXT NOT NULL,
                 target_model TEXT NOT NULL,
                 max_turns INTEGER DEFAULT 10,
+                turns_used INTEGER DEFAULT 0,
                 status TEXT DEFAULT 'pending',
                 started_at TEXT,
                 completed_at TEXT,
@@ -687,7 +688,8 @@ class ArsenalDB:
         return campaign_id
 
     def update_campaign_status(self, campaign_id: int, status: str,
-                               started_at: str = None, completed_at: str = None):
+                               started_at: str = None, completed_at: str = None,
+                               turns_used: int = None):
         """Update campaign status"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -701,6 +703,9 @@ class ArsenalDB:
         if completed_at:
             updates.append('completed_at = ?')
             values.append(completed_at)
+        if turns_used is not None:
+            updates.append('turns_used = ?')
+            values.append(turns_used)
 
         values.append(campaign_id)
         query = f"UPDATE multi_turn_campaigns SET {', '.join(updates)} WHERE id = ?"
@@ -843,7 +848,7 @@ class ArsenalDB:
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT * FROM turn_evaluations
+            SELECT * FROM multi_turn_evaluations
             WHERE campaign_id = ? AND turn_number = ?
         ''', (campaign_id, turn_number))
 

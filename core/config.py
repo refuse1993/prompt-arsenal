@@ -54,17 +54,43 @@ class Config:
         """Get API profile by name"""
         return self.config['profiles'].get(profile_name)
 
-    def get_all_profiles(self) -> Dict:
-        """Get all API profiles"""
-        return self.config['profiles']
+    def get_all_profiles(self, profile_type: Optional[str] = None) -> Dict:
+        """Get all API profiles, optionally filtered by type
 
-    def add_profile(self, name: str, provider: str, model: str, api_key: str, base_url: Optional[str] = None):
-        """Add new API profile"""
+        Args:
+            profile_type: Optional filter by profile type (llm, image_generation, etc.)
+
+        Returns:
+            Dictionary of profiles
+        """
+        profiles = self.config['profiles']
+
+        if profile_type:
+            return {
+                name: profile
+                for name, profile in profiles.items()
+                if profile.get('profile_type', 'llm') == profile_type
+            }
+
+        return profiles
+
+    def add_profile(self, name: str, provider: str, model: str, api_key: str, base_url: Optional[str] = None, profile_type: str = "llm"):
+        """Add new API profile
+
+        Args:
+            name: Profile name
+            provider: Provider name (openai, anthropic, google, dalle, stable-diffusion, etc.)
+            model: Model name
+            api_key: API key
+            base_url: Optional base URL
+            profile_type: Profile type (llm, image_generation, audio_generation, video_generation)
+        """
         self.config['profiles'][name] = {
             "provider": provider,
             "model": model,
             "api_key": api_key,
-            "base_url": base_url
+            "base_url": base_url,
+            "profile_type": profile_type
         }
         self.save_config()
 

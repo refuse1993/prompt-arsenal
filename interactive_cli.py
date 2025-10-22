@@ -163,36 +163,61 @@ class PromptArsenal:
         """실시간으로 사용 가능한 모델 조회"""
         try:
             if provider == "openai":
-                import openai
-                client = openai.OpenAI(api_key=api_key, base_url=base_url) if base_url else openai.OpenAI(api_key=api_key)
-                models = client.models.list()
-                return [{"id": m.id, "name": m.id, "created": m.created} for m in models.data]
+                # OpenAI 최신 멀티모달 모델 (2024-2025)
+                return [
+                    # GPT-4o Family (2024-2025) - Omni Models with Vision, Audio
+                    {"id": "gpt-4o", "name": "GPT-4o (Latest)", "capabilities": ["text", "image", "audio"], "context": "128K", "recommended": True},
+                    {"id": "gpt-4o-2024-08-06", "name": "GPT-4o (Aug 2024)", "capabilities": ["text", "image", "audio"], "context": "128K", "recommended": True},
+                    {"id": "gpt-4o-mini", "name": "GPT-4o mini", "capabilities": ["text", "image"], "context": "128K", "recommended": True},
+                    {"id": "gpt-4o-mini-2024-07-18", "name": "GPT-4o mini (Jul 2024)", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
+
+                    # GPT-4 Turbo with Vision (2024)
+                    {"id": "gpt-4-turbo", "name": "GPT-4 Turbo (Latest)", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
+                    {"id": "gpt-4-turbo-2024-04-09", "name": "GPT-4 Turbo (Apr 2024)", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
+                    {"id": "gpt-4-vision-preview", "name": "GPT-4 Vision Preview", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
+
+                    # GPT-4 (Text-only for comparison)
+                    {"id": "gpt-4", "name": "GPT-4 (Text only)", "capabilities": ["text"], "context": "8K", "recommended": False},
+                    {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo (Text only)", "capabilities": ["text"], "context": "16K", "recommended": False}
+                ]
 
             elif provider == "anthropic":
                 # Anthropic은 공식 모델 리스트 API가 없음
-                # 하드코딩된 최신 모델 반환
+                # 하드코딩된 최신 모델 반환 (2025년 기준)
                 return [
-                    {"id": "claude-opus-4.1", "name": "Claude Opus 4.1", "capabilities": ["text", "vision"]},
-                    {"id": "claude-sonnet-4.5", "name": "Claude Sonnet 4.5", "capabilities": ["text", "vision"]},
-                    {"id": "claude-haiku-4.5", "name": "Claude Haiku 4.5", "capabilities": ["text", "vision"]},
-                    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet", "capabilities": ["text", "vision"]},
-                    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus", "capabilities": ["text", "vision"]},
-                    {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet", "capabilities": ["text", "vision"]},
-                    {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku", "capabilities": ["text", "vision"]}
+                    # Claude 4 Family (2025) - Latest
+                    {"id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4 (May 2025)", "capabilities": ["text", "vision"], "context": "200K", "recommended": True},
+                    {"id": "claude-opus-4-20250805", "name": "Claude Opus 4.1 (Aug 2025)", "capabilities": ["text", "vision"], "context": "200K", "recommended": True},
+                    {"id": "claude-haiku-4-20251015", "name": "Claude Haiku 4.5 (Oct 2025)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
+
+                    # Claude 3.5 Family (2024)
+                    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet (Oct 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
+
+                    # Claude 3 Family (2024)
+                    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus (Feb 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
+                    {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet (Feb 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
+                    {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku (Mar 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False}
                 ]
 
             elif provider == "google":
-                import google.generativeai as genai
-                genai.configure(api_key=api_key)
-                models = []
-                for m in genai.list_models():
-                    if 'generateContent' in m.supported_generation_methods:
-                        models.append({
-                            "id": m.name.split('/')[-1],
-                            "name": m.display_name,
-                            "capabilities": m.supported_generation_methods
-                        })
-                return models
+                # Google Gemini 최신 모델 (2024-2025)
+                return [
+                    # Gemini 2.5 Family (2025) - Latest
+                    {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Latest)", "capabilities": ["text", "image", "audio", "video"], "context": "1M", "recommended": True},
+                    {"id": "gemini-2.5-flash-lite", "name": "Gemini 2.5 Flash Lite", "capabilities": ["text", "image"], "context": "1M", "recommended": False},
+
+                    # Gemini 2.0 Family (2024-2025)
+                    {"id": "gemini-2.0-flash-exp", "name": "Gemini 2.0 Flash (Experimental)", "capabilities": ["text", "image", "audio", "video"], "context": "1M", "recommended": True},
+                    {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite", "capabilities": ["text", "image"], "context": "1M", "recommended": False},
+
+                    # Gemini 1.5 Family (2024)
+                    {"id": "gemini-1.5-flash-002", "name": "Gemini 1.5 Flash", "capabilities": ["text", "image", "audio", "video"], "context": "1M", "recommended": False},
+                    {"id": "gemini-1.5-pro-002", "name": "Gemini 1.5 Pro", "capabilities": ["text", "image", "audio", "video"], "context": "2M", "recommended": False},
+                    {"id": "gemini-1.5-flash-8b", "name": "Gemini 1.5 Flash 8B", "capabilities": ["text", "image"], "context": "1M", "recommended": False},
+
+                    # Image Generation
+                    {"id": "gemini-2.5-flash-image", "name": "Gemini 2.5 Flash Image", "capabilities": ["image-generation"], "context": "N/A", "recommended": False}
+                ]
 
             elif provider == "xai":
                 # xAI Grok uses OpenAI-compatible API
@@ -203,6 +228,51 @@ class PromptArsenal:
                 )
                 models = client.models.list()
                 return [{"id": m.id, "name": m.id, "created": m.created} for m in models.data]
+
+            # Image generation providers
+            elif provider == "dalle":
+                return [
+                    {"id": "dall-e-3", "name": "DALL-E 3", "capabilities": ["text-to-image", "1024x1024", "hd"]},
+                    {"id": "dall-e-2", "name": "DALL-E 2", "capabilities": ["text-to-image", "1024x1024"]}
+                ]
+
+            elif provider == "stable-diffusion":
+                return [
+                    {"id": "stable-diffusion-xl-1024-v1-0", "name": "SDXL 1.0", "capabilities": ["text-to-image", "1024x1024"]},
+                    {"id": "stable-diffusion-v1-6", "name": "SD 1.6", "capabilities": ["text-to-image", "512x512"]},
+                    {"id": "stable-diffusion-512-v2-1", "name": "SD 2.1", "capabilities": ["text-to-image", "512x512"]}
+                ]
+
+            elif provider == "midjourney":
+                return [
+                    {"id": "midjourney-v6", "name": "Midjourney V6", "capabilities": ["text-to-image", "high-quality"]},
+                    {"id": "midjourney-v5", "name": "Midjourney V5", "capabilities": ["text-to-image"]}
+                ]
+
+            # Audio generation providers
+            elif provider == "openai-tts":
+                return [
+                    {"id": "tts-1", "name": "TTS 1", "capabilities": ["text-to-speech", "standard"]},
+                    {"id": "tts-1-hd", "name": "TTS 1 HD", "capabilities": ["text-to-speech", "hd"]}
+                ]
+
+            elif provider == "elevenlabs":
+                return [
+                    {"id": "eleven_monolingual_v1", "name": "Eleven Monolingual V1", "capabilities": ["text-to-speech", "english"]},
+                    {"id": "eleven_multilingual_v2", "name": "Eleven Multilingual V2", "capabilities": ["text-to-speech", "multilingual"]}
+                ]
+
+            # Video generation providers
+            elif provider == "runway":
+                return [
+                    {"id": "gen-2", "name": "Gen-2", "capabilities": ["text-to-video", "image-to-video"]},
+                    {"id": "gen-1", "name": "Gen-1", "capabilities": ["video-to-video"]}
+                ]
+
+            elif provider == "pika":
+                return [
+                    {"id": "pika-1.0", "name": "Pika 1.0", "capabilities": ["text-to-video", "image-to-video"]}
+                ]
 
             else:
                 return []
@@ -321,9 +391,8 @@ class PromptArsenal:
   [green]c[/green]. 캠페인 목록 및 결과 조회
 
 [bold cyan]⚙️  SETTINGS (설정)[/bold cyan]
-  [green]s[/green]. API 프로필 관리
+  [green]s[/green]. API 프로필 관리 (LLM, Image/Audio/Video 생성)
   [green]j[/green]. Judge 프로필 관리 (LLM Judge)
-  [green]m[/green]. 멀티모달 설정
   [green]e[/green]. 결과 내보내기
   [green]d[/green]. 데이터 삭제
 
@@ -2626,14 +2695,17 @@ class PromptArsenal:
         if profiles:
             table = Table(title="API Profiles")
             table.add_column("Name", style="cyan")
+            table.add_column("Type", style="blue")
             table.add_column("Provider", style="green")
             table.add_column("Model", style="yellow")
             table.add_column("Default", style="magenta", justify="center")
 
             for name, profile in profiles.items():
                 is_default = "★" if name == default_profile else ""
+                profile_type_display = profile.get('profile_type', 'llm')
                 table.add_row(
                     name,
+                    profile_type_display,
                     profile['provider'],
                     profile['model'],
                     is_default
@@ -2676,32 +2748,84 @@ class PromptArsenal:
                 console.print("[red]프로필 이름은 빈 문자열일 수 없습니다.[/red]")
                 return
 
-            console.print("\n[bold]Provider:[/bold]")
-            console.print("  [cyan]1.[/cyan] OpenAI")
-            console.print("  [cyan]2.[/cyan] Anthropic (Claude)")
-            console.print("  [cyan]3.[/cyan] Google (Gemini)")
-            console.print("  [cyan]4.[/cyan] xAI (Grok)")
-            console.print("  [cyan]5.[/cyan] Hugging Face")
-            console.print("  [cyan]6.[/cyan] Ollama (로컬)")
-            console.print("  [cyan]7.[/cyan] Together AI")
-            console.print("  [cyan]8.[/cyan] Replicate")
-            console.print("  [cyan]9.[/cyan] Cohere")
-            console.print("  [cyan]0.[/cyan] Local (커스텀)")
+            # Profile Type 선택
+            console.print("\n[bold]프로필 타입:[/bold]")
+            console.print("  [cyan]1.[/cyan] LLM (텍스트 생성)")
+            console.print("  [cyan]2.[/cyan] Image Generation (이미지 생성)")
+            console.print("  [cyan]3.[/cyan] Audio Generation (음성 생성)")
+            console.print("  [cyan]4.[/cyan] Video Generation (비디오 생성)")
 
-            provider_choice = ask("\n선택 (0-9)", default="1")
-            provider_map = {
-                "1": "openai",
-                "2": "anthropic",
-                "3": "google",
-                "4": "xai",
-                "5": "huggingface",
-                "6": "ollama",
-                "7": "together",
-                "8": "replicate",
-                "9": "cohere",
-                "0": "local"
+            profile_type_choice = ask("\n선택 (1-4)", default="1")
+            profile_type_map = {
+                "1": "llm",
+                "2": "image_generation",
+                "3": "audio_generation",
+                "4": "video_generation"
             }
-            provider = provider_map.get(provider_choice, "openai")
+            profile_type = profile_type_map.get(profile_type_choice, "llm")
+
+            console.print("\n[bold]Provider:[/bold]")
+
+            # Profile type에 따라 다른 provider 목록 표시
+            if profile_type == "image_generation":
+                console.print("  [cyan]1.[/cyan] DALL-E (OpenAI)")
+                console.print("  [cyan]2.[/cyan] Stable Diffusion")
+                console.print("  [cyan]3.[/cyan] Midjourney")
+                provider_choice = ask("\n선택 (1-3)", default="1")
+                provider_map = {
+                    "1": "dalle",
+                    "2": "stable-diffusion",
+                    "3": "midjourney"
+                }
+            elif profile_type == "audio_generation":
+                console.print("  [cyan]1.[/cyan] OpenAI TTS")
+                console.print("  [cyan]2.[/cyan] ElevenLabs")
+                provider_choice = ask("\n선택 (1-2)", default="1")
+                provider_map = {
+                    "1": "openai-tts",
+                    "2": "elevenlabs"
+                }
+            elif profile_type == "video_generation":
+                console.print("  [cyan]1.[/cyan] Runway")
+                console.print("  [cyan]2.[/cyan] Pika")
+                provider_choice = ask("\n선택 (1-2)", default="1")
+                provider_map = {
+                    "1": "runway",
+                    "2": "pika"
+                }
+            else:  # LLM
+                console.print("  [cyan]1.[/cyan] OpenAI")
+                console.print("  [cyan]2.[/cyan] Anthropic (Claude)")
+                console.print("  [cyan]3.[/cyan] Google (Gemini)")
+                console.print("  [cyan]4.[/cyan] xAI (Grok)")
+                console.print("  [cyan]5.[/cyan] Hugging Face")
+                console.print("  [cyan]6.[/cyan] Ollama (로컬)")
+                console.print("  [cyan]7.[/cyan] Together AI")
+                console.print("  [cyan]8.[/cyan] Replicate")
+                console.print("  [cyan]9.[/cyan] Cohere")
+                console.print("  [cyan]0.[/cyan] Local (커스텀)")
+                provider_choice = ask("\n선택 (0-9)", default="1")
+                provider_map = {
+                    "1": "openai",
+                    "2": "anthropic",
+                    "3": "google",
+                    "4": "xai",
+                    "5": "huggingface",
+                    "6": "ollama",
+                    "7": "together",
+                    "8": "replicate",
+                    "9": "cohere",
+                    "0": "local"
+                }
+
+            # Default provider per profile type
+            default_providers = {
+                "llm": "openai",
+                "image_generation": "dalle",
+                "audio_generation": "openai-tts",
+                "video_generation": "runway"
+            }
+            provider = provider_map.get(provider_choice, default_providers.get(profile_type, "openai"))
 
             # API Key 입력 (Ollama와 Local은 선택적)
             api_key = None
@@ -2709,7 +2833,7 @@ class PromptArsenal:
                 from getpass import getpass
                 api_key = getpass("\nAPI Key (입력 중 보이지 않음): ")
 
-                if not api_key:
+                if not api_key or api_key.strip() == "":
                     console.print("[red]API Key가 필요합니다.[/red]")
                     return
             else:
@@ -2746,13 +2870,37 @@ class PromptArsenal:
                     table = Table(title=f"{provider.upper()} Available Models")
                     table.add_column("No.", style="magenta", justify="right")
                     table.add_column("Model ID", style="cyan")
-                    table.add_column("Name/Info", style="white")
+                    table.add_column("Name", style="white")
+                    table.add_column("Capabilities", style="green")
+                    table.add_column("Context", style="yellow")
+                    table.add_column("Recommended", style="bold red")
 
                     for idx, m in enumerate(available_models, 1):
-                        name_info = m.get('name', m['id'])
-                        if 'capabilities' in m:
-                            name_info += f" ({', '.join(m['capabilities'][:2])})"
-                        table.add_row(str(idx), m['id'], name_info)
+                        model_id = m['id']
+                        name = m.get('name', m['id'])
+
+                        # Capabilities 표시
+                        caps = m.get('capabilities', [])
+                        if caps:
+                            # 아이콘으로 표시
+                            cap_icons = {
+                                'text': '📝',
+                                'image': '🖼️',
+                                'vision': '👁️',
+                                'audio': '🔊',
+                                'video': '🎬'
+                            }
+                            cap_str = ' '.join([cap_icons.get(c, c) for c in caps[:4]])
+                        else:
+                            cap_str = "-"
+
+                        # Context window
+                        context = m.get('context', '-')
+
+                        # Recommended
+                        recommended = "⭐" if m.get('recommended', False) else ""
+
+                        table.add_row(str(idx), model_id, name, cap_str, context, recommended)
 
                     console.print(table)
 
@@ -2810,8 +2958,8 @@ class PromptArsenal:
                 else:
                     model = ask("모델명 입력")
 
-            self.config.add_profile(name, provider, model, api_key, base_url)
-            console.print(f"\n[green]✅ '{name}' 프로필 추가 완료![/green]")
+            self.config.add_profile(name, provider, model, api_key, base_url, profile_type)
+            console.print(f"\n[green]✅ '{name}' 프로필 추가 완료! (타입: {profile_type})[/green]")
 
             # 첫 프로필이면 자동으로 기본 설정
             if len(profiles) == 0:
@@ -3176,14 +3324,16 @@ class PromptArsenal:
         # Strategy selection
         console.print("\n[bold]공격 전략 선택:[/bold]")
         console.print("  [green]1[/green]. Visual Storytelling (83.5% 성공률, 멀티모달)")
-        console.print("  [green]2[/green]. Crescendo (65-70% 성공률, 점진적 escalation)")
-        console.print("  [green]3[/green]. Roleplay (60-70% 성공률, 시나리오 기반)")
+        console.print("  [green]2[/green]. Improved Visual Storytelling (🆕 가드레일 우회, 멀티모달)")
+        console.print("  [green]3[/green]. Crescendo (65-70% 성공률, 점진적 escalation)")
+        console.print("  [green]4[/green]. Roleplay (60-70% 성공률, 시나리오 기반)")
 
-        strategy_choice = ask("전략", choices=["1", "2", "3"])
+        strategy_choice = ask("전략", choices=["1", "2", "3", "4"])
         strategy_map = {
             "1": "visual_storytelling",
-            "2": "crescendo",
-            "3": "roleplay"
+            "2": "improved_visual_storytelling",
+            "3": "crescendo",
+            "4": "roleplay"
         }
         strategy_name = strategy_map[strategy_choice]
 
@@ -3196,9 +3346,59 @@ class PromptArsenal:
         # Campaign name
         campaign_name = ask("캠페인 이름 (선택사항)", default=None)
 
-        # Max turns
-        max_turns_str = ask("최대 턴 수", default="10")
+        # Max turns with strategy-specific defaults
+        strategy_defaults = {
+            "visual_storytelling": "10",  # Needs 6 panels + synthesis
+            "improved_visual_storytelling": "10",  # Same as visual_storytelling
+            "crescendo": "7",
+            "roleplay": "5"
+        }
+        default_turns = strategy_defaults.get(strategy_name, "10")
+
+        max_turns_str = ask("최대 턴 수", default=default_turns)
         max_turns = int(max_turns_str)
+
+        # Define strategy requirements
+        strategy_requirements = {
+            "visual_storytelling": {
+                "required_capabilities": ["text", "image"],
+                "recommended_models": [
+                    "gpt-4o", "gpt-4o-2024-08-06",
+                    "claude-sonnet-4-20250514", "claude-opus-4-20250805",
+                    "gemini-2.5-flash", "gemini-2.0-flash-exp"
+                ],
+                "min_turns": 7
+            },
+            "improved_visual_storytelling": {
+                "required_capabilities": ["text", "image"],
+                "recommended_models": [
+                    "gpt-4o", "gpt-4o-2024-08-06",
+                    "claude-sonnet-4-20250514", "claude-opus-4-20250805",
+                    "gemini-2.5-flash", "gemini-2.0-flash-exp"
+                ],
+                "min_turns": 7
+            },
+            "crescendo": {
+                "required_capabilities": ["text"],
+                "recommended_models": [
+                    "gpt-4o-mini", "gpt-4o",
+                    "claude-3-5-sonnet-20241022", "claude-sonnet-4-20250514",
+                    "gemini-2.0-flash-exp", "gemini-1.5-flash-002"
+                ],
+                "min_turns": 5
+            },
+            "roleplay": {
+                "required_capabilities": ["text"],
+                "recommended_models": [
+                    "gpt-4o-mini", "gpt-4-turbo",
+                    "claude-haiku-4-20251015", "claude-3-5-sonnet-20241022",
+                    "gemini-1.5-flash-002", "gemini-2.0-flash-lite"
+                ],
+                "min_turns": 3
+            }
+        }
+
+        requirements = strategy_requirements.get(strategy_name, {})
 
         # Select API profile
         profiles = list(self.config.config['profiles'].keys())
@@ -3207,12 +3407,38 @@ class PromptArsenal:
             return
 
         console.print("\n[bold]Target API 프로필:[/bold]")
+
+        # Show strategy-specific recommendations
+        if requirements.get('recommended_models'):
+            console.print(f"\n[yellow]💡 {strategy_name} 전략 추천 모델:[/yellow]")
+            for model in requirements['recommended_models'][:3]:
+                console.print(f"   • {model}")
+
+        if requirements.get('min_turns'):
+            console.print(f"\n[yellow]ℹ️  이 전략은 최소 {requirements['min_turns']}턴이 필요합니다.[/yellow]\n")
+
         for idx, name in enumerate(profiles, 1):
             prof = self.config.config['profiles'][name]
-            console.print(f"  [green]{idx}[/green]. {name} ({prof['provider']}/{prof['model']})")
+            model_id = prof['model']
+
+            # Check if model is recommended
+            is_recommended = model_id in requirements.get('recommended_models', [])
+            rec_icon = " ⭐" if is_recommended else ""
+
+            console.print(f"  [green]{idx}[/green]. {name} ({prof['provider']}/{prof['model']}){rec_icon}")
 
         profile_idx = ask("프로필 번호", default="1")
-        profile_name = profiles[int(profile_idx) - 1]
+        try:
+            idx = int(profile_idx) - 1
+            if 0 <= idx < len(profiles):
+                profile_name = profiles[idx]
+            else:
+                console.print("[yellow]잘못된 선택입니다. 첫 번째 프로필을 사용합니다.[/yellow]")
+                profile_name = profiles[0]
+        except ValueError:
+            console.print("[yellow]숫자를 입력하세요. 첫 번째 프로필을 사용합니다.[/yellow]")
+            profile_name = profiles[0]
+
         profile = self.config.config['profiles'][profile_name]
 
         # Judge profile selection
@@ -3227,14 +3453,29 @@ class PromptArsenal:
             console.print(f"  [green]{idx}[/green]. {name} ({jprof['provider']}/{jprof['model']})")
 
         judge_idx = ask("Judge 프로필 번호", default="1")
-        judge_name = judge_profiles[int(judge_idx) - 1]
+        try:
+            idx = int(judge_idx) - 1
+            if 0 <= idx < len(judge_profiles):
+                judge_name = judge_profiles[idx]
+            else:
+                console.print("[yellow]잘못된 선택입니다. 첫 번째 프로필을 사용합니다.[/yellow]")
+                judge_name = judge_profiles[0]
+        except ValueError:
+            console.print("[yellow]숫자를 입력하세요. 첫 번째 프로필을 사용합니다.[/yellow]")
+            judge_name = judge_profiles[0]
+
         judge_profile = self.config.config['judge_profiles'][judge_name]
 
         # Initialize components
         from multimodal.llm_client import LLMClient, MultimodalLLMClient
         from multimodal.image_generator import ImageGenerator, MockImageGenerator
         from multiturn import MultiTurnOrchestrator, MultiTurnScorer
-        from multiturn.strategies import VisualStorytellingStrategy, CrescendoStrategy, RoleplayStrategy
+        from multiturn.strategies import (
+            VisualStorytellingStrategy,
+            ImprovedVisualStorytellingStrategy,
+            CrescendoStrategy,
+            RoleplayStrategy
+        )
 
         # Create LLM clients
         strategy_llm = LLMClient(
@@ -3252,6 +3493,7 @@ class PromptArsenal:
         # Create judge
         from core.llm_judge import LLMJudge
         judge = LLMJudge(
+            db=self.db,
             provider=judge_profile['provider'],
             model=judge_profile['model'],
             api_key=judge_profile['api_key']
@@ -3262,17 +3504,114 @@ class PromptArsenal:
 
         # Create strategy
         if strategy_name == "visual_storytelling":
-            # Image generator
-            img_gen_provider = ask("\nImage Generator (dalle/stable-diffusion/mock)", default="mock")
-            if img_gen_provider == "mock":
+            # Image generation profile 선택
+            console.print("\n[bold yellow]Image Generation 프로필:[/bold yellow]")
+            img_profiles = self.config.get_all_profiles(profile_type="image_generation")
+
+            if not img_profiles:
+                console.print("[yellow]⚠️  이미지 생성 프로필이 없습니다. Mock 생성기를 사용합니다.[/yellow]")
+                console.print("[dim]💡 Tip: 's' 메뉴에서 이미지 생성 프로필을 추가할 수 있습니다.[/dim]")
                 image_gen = MockImageGenerator()
             else:
-                image_gen = ImageGenerator(
-                    provider=img_gen_provider,
-                    api_key=profile['api_key']
-                )
+                table = Table(title="Image Generation Profiles")
+                table.add_column("No.", style="magenta", justify="right")
+                table.add_column("Name", style="cyan")
+                table.add_column("Provider", style="green")
+                table.add_column("Model", style="yellow")
+
+                img_profile_list = list(img_profiles.items())
+                for idx, (name, img_profile) in enumerate(img_profile_list, 1):
+                    table.add_row(str(idx), name, img_profile['provider'], img_profile['model'])
+
+                console.print(table)
+
+                img_choice = ask(f"프로필 번호 (1-{len(img_profile_list)})", default="1")
+
+                try:
+                    idx = int(img_choice) - 1
+                    if 0 <= idx < len(img_profile_list):
+                        img_profile_name = img_profile_list[idx][0]
+                        img_profile = img_profiles[img_profile_name]
+
+                        image_gen = ImageGenerator(
+                            provider=img_profile['provider'],
+                            api_key=img_profile['api_key']
+                        )
+                    else:
+                        console.print("[yellow]잘못된 선택입니다. 첫 번째 프로필을 사용합니다.[/yellow]")
+                        img_profile_name = img_profile_list[0][0]
+                        img_profile = img_profiles[img_profile_name]
+                        image_gen = ImageGenerator(
+                            provider=img_profile['provider'],
+                            api_key=img_profile['api_key']
+                        )
+                except ValueError:
+                    console.print("[yellow]숫자를 입력하세요. 첫 번째 프로필을 사용합니다.[/yellow]")
+                    img_profile_name = img_profile_list[0][0]
+                    img_profile = img_profiles[img_profile_name]
+                    image_gen = ImageGenerator(
+                        provider=img_profile['provider'],
+                        api_key=img_profile['api_key']
+                    )
 
             strategy = VisualStorytellingStrategy(
+                db=self.db,
+                llm_client=strategy_llm,
+                image_generator=image_gen
+            )
+
+        elif strategy_name == "improved_visual_storytelling":
+            # Image generation profile 선택 (visual_storytelling과 동일)
+            console.print("\n[bold yellow]Image Generation 프로필:[/bold yellow]")
+            img_profiles = self.config.get_all_profiles(profile_type="image_generation")
+
+            if not img_profiles:
+                console.print("[yellow]⚠️  이미지 생성 프로필이 없습니다. Mock 생성기를 사용합니다.[/yellow]")
+                console.print("[dim]💡 Tip: 's' 메뉴에서 이미지 생성 프로필을 추가할 수 있습니다.[/dim]")
+                image_gen = MockImageGenerator()
+            else:
+                table = Table(title="Image Generation Profiles")
+                table.add_column("No.", style="magenta", justify="right")
+                table.add_column("Name", style="cyan")
+                table.add_column("Provider", style="green")
+                table.add_column("Model", style="yellow")
+
+                img_profile_list = list(img_profiles.items())
+                for idx, (name, img_profile) in enumerate(img_profile_list, 1):
+                    table.add_row(str(idx), name, img_profile['provider'], img_profile['model'])
+
+                console.print(table)
+
+                img_choice = ask(f"프로필 번호 (1-{len(img_profile_list)})", default="1")
+
+                try:
+                    idx = int(img_choice) - 1
+                    if 0 <= idx < len(img_profile_list):
+                        img_profile_name = img_profile_list[idx][0]
+                        img_profile = img_profiles[img_profile_name]
+
+                        image_gen = ImageGenerator(
+                            provider=img_profile['provider'],
+                            api_key=img_profile['api_key']
+                        )
+                    else:
+                        console.print("[yellow]잘못된 선택입니다. 첫 번째 프로필을 사용합니다.[/yellow]")
+                        img_profile_name = img_profile_list[0][0]
+                        img_profile = img_profiles[img_profile_name]
+                        image_gen = ImageGenerator(
+                            provider=img_profile['provider'],
+                            api_key=img_profile['api_key']
+                        )
+                except ValueError:
+                    console.print("[yellow]숫자를 입력하세요. 첫 번째 프로필을 사용합니다.[/yellow]")
+                    img_profile_name = img_profile_list[0][0]
+                    img_profile = img_profiles[img_profile_name]
+                    image_gen = ImageGenerator(
+                        provider=img_profile['provider'],
+                        api_key=img_profile['api_key']
+                    )
+
+            strategy = ImprovedVisualStorytellingStrategy(
                 db=self.db,
                 llm_client=strategy_llm,
                 image_generator=image_gen
@@ -3320,22 +3659,62 @@ class PromptArsenal:
                 console.print("[bold yellow]┃[/bold yellow] [bold red]❌ CAMPAIGN FAILED[/bold red]                        [bold yellow]┃[/bold yellow]")
             console.print("[bold yellow]┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛[/bold yellow]")
 
-            console.print(f"\n[bold white]Campaign ID:[/bold white] {result['campaign_id']}")
-            console.print(f"[bold white]Turns Used:[/bold white] {result['turns_used']}/{max_turns}")
-            console.print(f"[bold white]Final Progress:[/bold white] {result['final_progress']:.1%}")
+            # Campaign summary
+            console.print("\n" + "="*80)
+            console.print(f"[bold cyan]📊 캠페인 #{result['campaign_id']}: {campaign_name or 'Unnamed'}[/bold cyan]")
+            console.print("="*80)
+            console.print(f"[bold white]🎯 목표:[/bold white] {goal}")
+            console.print(f"[bold white]⚔️  전략:[/bold white] {strategy_name}")
+            console.print(f"[bold white]🤖 대상:[/bold white] {profile['provider']}/{profile['model']}")
 
-            # Show conversation summary
-            console.print("\n[bold cyan]📜 Conversation Summary:[/bold cyan]")
-            for turn in result['conversation'][:3]:  # Show first 3 turns
-                console.print(f"\n[bold yellow]Turn {turn.turn_number + 1}:[/bold yellow]")
-                prompt_preview = turn.prompt.get('text', '')[:100]
-                console.print(f"  Prompt: {prompt_preview}...")
-                response_preview = turn.response[:100]
-                console.print(f"  Response: {response_preview}...")
+            status_icon = "✅" if result['success'] else "❌"
+            status_text = "completed" if result['success'] else "failed"
+            console.print(f"[bold white]📈 상태:[/bold white] {status_icon} {status_text}")
+            console.print(f"[bold white]🔢 사용된 턴:[/bold white] {result['turns_used']}/{max_turns}")
+            console.print(f"[bold white]📊 최종 진행률:[/bold white] {result['final_progress']:.1%}")
 
+            # Display full conversation
+            console.print("\n" + "="*80)
+            console.print(f"[bold yellow]📜 전체 대화 ({len(result['conversation'])}턴)[/bold yellow]")
+            console.print("="*80)
+
+            for turn in result['conversation']:
+                turn_num = turn.turn_number + 1
+                console.print(f"\n{'='*80}")
+                console.print(f"[bold cyan]턴 {turn_num}/{len(result['conversation'])}[/bold cyan]")
+                console.print(f"{'='*80}")
+
+                # Display prompt
+                console.print(f"\n[bold green]💬 프롬프트:[/bold green]")
+                console.print(f"[white]{turn.prompt.get('text', '')}[/white]")
+
+                # Display response
+                console.print(f"\n[bold blue]🤖 응답:[/bold blue]")
+                console.print(f"[white]{turn.response}[/white]")
+
+                # Display response time
+                if turn.response_time:
+                    console.print(f"\n[dim]⏱️  응답 시간: {turn.response_time:.2f}초[/dim]")
+
+                # Show detailed evaluation
                 if turn.evaluation:
-                    eval_icon = "✅" if turn.evaluation['goal_achieved'] else "❌"
-                    console.print(f"  {eval_icon} Progress: {turn.evaluation['progress']:.1%}")
+                    console.print(f"\n[bold magenta]📊 평가:[/bold magenta]")
+
+                    goal_status = "✅ 달성" if turn.evaluation['goal_achieved'] else "❌ 미달성"
+                    console.print(f"  [bold]목표 달성:[/bold] {goal_status}")
+                    console.print(f"  [bold]진행률:[/bold] {turn.evaluation['progress']:.1%}")
+                    console.print(f"  [bold]유해성:[/bold] {turn.evaluation.get('toxicity', 'N/A')}")
+
+                    defense_status = "⚠️  작동함" if turn.evaluation['defense_triggered'] else "✅ 안함"
+                    console.print(f"  [bold]방어 작동:[/bold] {defense_status}")
+
+                    if turn.evaluation.get('confidence') is not None:
+                        console.print(f"  [bold]신뢰도:[/bold] {turn.evaluation['confidence']:.1%}")
+
+                    if turn.evaluation.get('reasoning'):
+                        console.print(f"  [bold]판정 이유:[/bold] {turn.evaluation['reasoning']}")
+
+            console.print("\n" + "="*80)
 
         except Exception as e:
             console.print(f"\n[red]❌ Campaign execution failed: {e}[/red]")
@@ -3391,26 +3770,66 @@ class PromptArsenal:
             # Get conversations
             conversations = self.db.get_campaign_conversations(campaign_id)
 
-            # Display details
-            console.print(f"\n[bold cyan]Campaign #{campaign_id}: {campaign['name']}[/bold cyan]")
-            console.print(f"Goal: {campaign['goal']}")
-            console.print(f"Strategy: {campaign['strategy']}")
-            console.print(f"Status: {campaign['status']}")
-            console.print(f"Max Turns: {campaign['max_turns']}")
+            # Display campaign summary
+            console.print("\n" + "="*80)
+            console.print(f"[bold cyan]📊 캠페인 #{campaign_id}: {campaign['name']}[/bold cyan]")
+            console.print("="*80)
+            console.print(f"[bold white]🎯 목표:[/bold white] {campaign['goal']}")
+            console.print(f"[bold white]⚔️  전략:[/bold white] {campaign['strategy']}")
+            console.print(f"[bold white]🤖 대상:[/bold white] {campaign['target_provider']}/{campaign['target_model']}")
 
-            console.print(f"\n[bold yellow]Conversation History ({len(conversations)} turns):[/bold yellow]")
+            status_icon = "✅" if campaign['status'] == 'completed' else "❌" if campaign['status'] == 'failed' else "🔄"
+            console.print(f"[bold white]📈 상태:[/bold white] {status_icon} {campaign['status']}")
+            console.print(f"[bold white]🔢 사용된 턴:[/bold white] {campaign.get('turns_used', 0)}/{campaign['max_turns']}")
+
+            if campaign.get('started_at'):
+                console.print(f"[bold white]⏰ 시작 시간:[/bold white] {campaign['started_at']}")
+            if campaign.get('completed_at'):
+                console.print(f"[bold white]✅ 완료 시간:[/bold white] {campaign['completed_at']}")
+
+            # Display full conversation
+            console.print("\n" + "="*80)
+            console.print(f"[bold yellow]📜 전체 대화 ({len(conversations)}턴)[/bold yellow]")
+            console.print("="*80)
 
             for conv in conversations:
-                console.print(f"\n[bold]Turn {conv['turn_number'] + 1}:[/bold]")
-                console.print(f"Prompt: {conv['prompt_text'][:200]}...")
-                console.print(f"Response: {conv['response'][:200]}...")
+                turn_num = conv['turn_number'] + 1
+                console.print(f"\n{'='*80}")
+                console.print(f"[bold cyan]턴 {turn_num}/{len(conversations)}[/bold cyan]")
+                console.print(f"{'='*80}")
 
-                # Show evaluation if available
+                # Display prompt
+                console.print(f"\n[bold green]💬 프롬프트:[/bold green]")
+                console.print(f"[white]{conv['prompt_text']}[/white]")
+
+                # Display response
+                console.print(f"\n[bold blue]🤖 응답:[/bold blue]")
+                console.print(f"[white]{conv['response']}[/white]")
+
+                # Display response time if available
+                if conv.get('response_time'):
+                    console.print(f"\n[dim]⏱️  응답 시간: {conv['response_time']:.2f}초[/dim]")
+
+                # Show detailed evaluation if available
                 evaluation = self.db.get_turn_evaluation(campaign_id, conv['turn_number'])
                 if evaluation:
-                    console.print(f"  Goal Achieved: {'✅' if evaluation['goal_achieved'] else '❌'}")
-                    console.print(f"  Progress: {evaluation['progress']:.1%}")
-                    console.print(f"  Defense Triggered: {'⚠️ Yes' if evaluation['defense_triggered'] else 'No'}")
+                    console.print(f"\n[bold magenta]📊 평가:[/bold magenta]")
+
+                    goal_status = "✅ 달성" if evaluation['goal_achieved'] else "❌ 미달성"
+                    console.print(f"  [bold]목표 달성:[/bold] {goal_status}")
+                    console.print(f"  [bold]진행률:[/bold] {evaluation['progress']:.1%}")
+                    console.print(f"  [bold]유해성:[/bold] {evaluation.get('toxicity', 'N/A')}")
+
+                    defense_status = "⚠️  작동함" if evaluation['defense_triggered'] else "✅ 안함"
+                    console.print(f"  [bold]방어 작동:[/bold] {defense_status}")
+
+                    if evaluation.get('confidence') is not None:
+                        console.print(f"  [bold]신뢰도:[/bold] {evaluation['confidence']:.1%}")
+
+                    if evaluation.get('reasoning'):
+                        console.print(f"  [bold]판정 이유:[/bold] {evaluation['reasoning']}")
+
+            console.print("\n" + "="*80)
 
     def run(self):
         """Main application loop"""
