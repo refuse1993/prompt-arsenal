@@ -559,6 +559,13 @@ class PromptArsenal:
 [bold yellow]🛡️  SECURITY (보안 스캔)[/bold yellow]
   [green]a[/green]. 코드 취약점 스캔 (CWE 기반)
   [green]v[/green]. 스캔 결과 조회
+  [green]y[/green]. 시스템 취약점 스캔 (포트/CVE)
+  [green]n[/green]. 시스템 스캔 이력
+
+[bold magenta]🚩 CTF (자동 풀이)[/bold magenta]
+  [green]f[/green]. CTF 문제 추가
+  [green]t[/green]. CTF 자동 풀이 실행
+  [green]k[/green]. CTF 문제 목록 및 통계
 
 [bold cyan]⚙️  SETTINGS (설정)[/bold cyan]
   [green]s[/green]. API 프로필 관리 (LLM, Image/Audio/Video 생성)
@@ -3881,6 +3888,458 @@ class PromptArsenal:
 
     # === SETTINGS ===
 
+    async def security_system_scan(self):
+        """System vulnerability scan"""
+        console.print("\n[bold yellow]🔍 시스템 취약점 스캔[/bold yellow]\n")
+
+        # Import system scanner
+        from system.scanner_core import SystemScanner
+
+        # Get target
+        target = ask("대상 IP 또는 도메인", default="127.0.0.1")
+
+        # Get scan type
+        console.print("\n스캔 타입:")
+        console.print("  [green]quick[/green]: 빠른 스캔 (100개 포트)")
+        console.print("  [green]standard[/green]: 표준 스캔 (1000개 포트)")
+        console.print("  [green]full[/green]: 전체 스캔 (65535개 포트)")
+        scan_type = ask("스캔 타입", default="standard", choices=["quick", "standard", "full"])
+
+        # LLM 분석 사용 여부
+        use_llm = confirm("LLM 취약점 분석 사용?", default=False)
+
+        llm_config = None
+        if use_llm:
+            # Get LLM profiles
+            profiles = self.config.get_all_profiles(profile_type='llm')
+            if not profiles:
+                console.print("[yellow]LLM 프로필이 없습니다. 먼저 's' 메뉴에서 설정하세요.[/yellow]")
+                return
+
+            # Show profiles
+            console.print("\nLLM 프로필:")
+            for i, (name, profile) in enumerate(profiles.items(), 1):
+                console.print(f"  [green]{i}[/green]. {name} ({profile['provider']}/{profile['model']})")
+
+            profile_choice = ask("프로필 번호", default="1")
+            try:
+                profile_idx = int(profile_choice) - 1
+                profile_name = list(profiles.keys())[profile_idx]
+                profile = profiles[profile_name]
+
+                llm_config = {
+                    'provider': profile['provider'],
+                    'model': profile['model'],
+                    'api_key': profile['api_key']
+                }
+            except (ValueError, IndexError):
+                console.print("[yellow]잘못된 선택입니다. LLM 분석 없이 진행합니다.[/yellow]")
+                use_llm = False
+
+        # Create scanner
+        scanner = SystemScanner(self.db)
+
+        # Run scan
+        console.print(f"\n[cyan]스캔 시작: {target}...[/cyan]\n")
+
+        try:
+            scan_result = await scanner.scan(
+                target=target,
+                scan_type=scan_type,
+                use_llm=use_llm,
+                llm_config=llm_config
+            )
+
+            # Show LLM analysis if available
+            if scan_result.get('llm_analysis'):
+                console.print("\n[bold cyan]🤖 LLM 취약점 분석[/bold cyan]\n")
+                console.print(scan_result['llm_analysis'])
+
+            console.print("\n[green]✓ 스캔 완료![/green]")
+
+            # Export option
+            if confirm("\n리포트 내보내기?", default=False):
+                format_choice = ask("형식 (json/markdown)", default="markdown")
+                report = scanner.export_report(scan_result['scan_id'], format=format_choice)
+
+                filename = f"system_scan_{scan_result['scan_id']}.{format_choice.replace('markdown', 'md')}"
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(report)
+
+                console.print(f"[green]✓ 리포트 저장됨: {filename}[/green]")
+
+        except Exception as e:
+            console.print(f"[red]스캔 실패: {e}[/red]")
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
+
+    def security_system_scan_history(self):
+        """View system scan history"""
+        console.print("\n[bold yellow]📊 시스템 스캔 이력[/bold yellow]\n")
+
+        # Get scans
+        scans = self.db.get_system_scans(limit=20)
+
+        if not scans:
+            console.print("[yellow]저장된 스캔 이력이 없습니다.[/yellow]")
+            return
+
+        # Show scans table
+        table = Table(title="최근 시스템 스캔")
+        table.add_column("ID", style="magenta", justify="right")
+        table.add_column("대상", style="cyan")
+        table.add_column("타입", style="green")
+        table.add_column("포트", justify="right")
+        table.add_column("발견", justify="right")
+        table.add_column("위험도", justify="right", style="red")
+        table.add_column("LLM", style="dim")
+        table.add_column("날짜", style="dim")
+
+        for scan in scans:
+            import json
+            open_ports = json.loads(scan['open_ports'])
+            findings = json.loads(scan['findings'])
+
+            risk_emoji = {
+                'Critical': '🔴',
+                'High': '🟠',
+                'Medium': '🟡',
+                'Low': '🟢'
+            }
+            risk_score = scan['risk_score']
+            risk_level = 'Critical' if risk_score >= 80 else 'High' if risk_score >= 60 else 'Medium' if risk_score >= 30 else 'Low'
+
+            table.add_row(
+                str(scan['id']),
+                scan['target'],
+                scan['scan_type'],
+                str(len(open_ports)),
+                str(len(findings)),
+                f"{risk_emoji.get(risk_level, '')} {risk_score}",
+                "✓" if scan['llm_analysis'] else "-",
+                scan['created_at'][:16]
+            )
+
+        console.print(table)
+
+        # Select scan to view details
+        scan_id = ask("\n상세보기할 스캔 ID (Enter=취소)", default="")
+        if not scan_id:
+            return
+
+        try:
+            scan_id = int(scan_id)
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
+
+        # Get scan details
+        from system.scanner_core import SystemScanner
+        scanner = SystemScanner(self.db)
+        scan = scanner.get_scan_details(scan_id)
+
+        if not scan:
+            console.print("[red]스캔을 찾을 수 없습니다.[/red]")
+            return
+
+        # Show scan details
+        console.print(f"\n[bold cyan]{'═' * 80}[/bold cyan]")
+        console.print(f"[bold cyan]시스템 스캔 #{scan_id}: {scan['target']}[/bold cyan]")
+        console.print(f"[bold cyan]{'═' * 80}[/bold cyan]\n")
+
+        console.print(f"[yellow]스캔 타입:[/yellow] {scan['scan_type']}")
+        console.print(f"[yellow]스캔 시간:[/yellow] {scan['start_time']}")
+        console.print(f"[yellow]위험도 점수:[/yellow] {scan['risk_score']}/100")
+        console.print(f"[yellow]열린 포트:[/yellow] {len(scan['open_ports'])}개")
+        console.print(f"[yellow]발견 사항:[/yellow] {len(scan['findings'])}개\n")
+
+        # Show open ports
+        if scan['open_ports']:
+            console.print("[bold cyan]🌐 열린 포트:[/bold cyan]")
+            for port in scan['open_ports'][:10]:
+                version_str = f" ({port.get('version', '')})" if port.get('version') else ""
+                console.print(f"  • Port {port['port']}/{port['protocol']}: {port['service']}{version_str}")
+
+            if len(scan['open_ports']) > 10:
+                console.print(f"  ... 그 외 {len(scan['open_ports']) - 10}개 포트")
+            console.print()
+
+        # Show findings
+        if scan['findings']:
+            console.print("[bold red]⚠️  주요 발견 사항:[/bold red]")
+            for i, finding in enumerate(scan['findings'][:10], 1):
+                severity_symbol = {
+                    'critical': '🔴',
+                    'high': '🟠',
+                    'medium': '🟡',
+                    'low': '🟢'
+                }.get(finding['severity'], '⚪')
+
+                console.print(f"  {i}. {severity_symbol} [{finding['severity'].upper()}] {finding['title']}")
+                if finding.get('cve_id'):
+                    console.print(f"     CVE: {finding['cve_id']}")
+                console.print(f"     {finding['description'][:100]}...")
+                console.print()
+
+            if len(scan['findings']) > 10:
+                console.print(f"  ... 그 외 {len(scan['findings']) - 10}개 발견 사항")
+
+        # Show LLM analysis
+        if scan.get('llm_analysis'):
+            if confirm("\nLLM 분석 보기?", default=True):
+                console.print(f"\n[bold cyan]{'═' * 80}[/bold cyan]")
+                console.print(scan['llm_analysis'])
+                console.print(f"[bold cyan]{'═' * 80}[/bold cyan]\n")
+
+    # === CTF Auto-Solver Methods ===
+
+    def ctf_add_challenge(self):
+        """Add CTF challenge"""
+        console.print("\n[bold magenta]🚩 CTF 문제 추가[/bold magenta]\n")
+
+        # Category selection
+        console.print("[yellow]카테고리:[/yellow]")
+        console.print("  1. Web")
+        console.print("  2. Forensics")
+        console.print("  3. Pwn")
+        console.print("  4. Crypto")
+        console.print("  5. Reversing")
+        console.print("  6. Misc")
+
+        category_map = {
+            '1': 'web', '2': 'forensics', '3': 'pwn',
+            '4': 'crypto', '5': 'reversing', '6': 'misc'
+        }
+
+        category_choice = ask("카테고리 선택 (1-6)", default="1")
+        category = category_map.get(category_choice, 'misc')
+
+        # Basic info
+        title = ask("문제 제목")
+        if not title:
+            console.print("[red]제목은 필수입니다.[/red]")
+            return
+
+        description = ask("문제 설명", default="")
+        difficulty = ask("난이도 (easy/medium/hard)", default="medium")
+
+        challenge_data = {
+            'title': title,
+            'category': category,
+            'difficulty': difficulty,
+            'description': description,
+            'hints': []
+        }
+
+        # Category-specific fields
+        if category == 'web':
+            url = ask("URL (필수)", default="")
+            if url:
+                challenge_data['url'] = url
+            else:
+                console.print("[red]Web 문제는 URL이 필수입니다.[/red]")
+                return
+
+        elif category in ['forensics', 'reversing']:
+            file_path = ask("파일 경로", default="")
+            if file_path:
+                challenge_data['file_path'] = file_path
+
+        elif category == 'pwn':
+            file_path = ask("바이너리 파일 경로", default="")
+            if file_path:
+                challenge_data['file_path'] = file_path
+
+            host = ask("호스트 (선택)", default="")
+            port = ask("포트 (선택)", default="")
+            if host:
+                challenge_data['host'] = host
+            if port:
+                try:
+                    challenge_data['port'] = int(port)
+                except:
+                    pass
+
+        elif category == 'crypto':
+            ciphertext = ask("암호문", default="")
+            if ciphertext:
+                challenge_data['ciphertext'] = ciphertext
+
+            key = ask("키 (선택)", default="")
+            if key:
+                challenge_data['key'] = key
+
+        # Hints
+        hints = []
+        while True:
+            hint = ask(f"힌트 {len(hints)+1} (Enter=종료)", default="")
+            if not hint:
+                break
+            hints.append(hint)
+
+        if hints:
+            challenge_data['hints'] = hints
+
+        # Insert to DB
+        challenge_id = self.db.insert_ctf_challenge(challenge_data)
+
+        console.print(f"\n[green]✓ CTF 문제가 추가되었습니다 (ID: {challenge_id})[/green]")
+
+    async def ctf_auto_solve(self):
+        """Auto-solve CTF challenge"""
+        console.print("\n[bold magenta]🚩 CTF 자동 풀이[/bold magenta]\n")
+
+        # Get unsolved challenges
+        challenges = self.db.get_ctf_challenges(status='pending', limit=50)
+
+        if not challenges:
+            console.print("[yellow]풀이 가능한 문제가 없습니다.[/yellow]")
+            console.print("[dim]'f'를 눌러 문제를 추가하세요.[/dim]")
+            return
+
+        # Show challenges table
+        table = Table(title="미해결 CTF 문제")
+        table.add_column("ID", style="magenta", justify="right")
+        table.add_column("제목", style="cyan")
+        table.add_column("카테고리", style="green")
+        table.add_column("난이도", style="yellow")
+        table.add_column("생성일", style="dim")
+
+        for challenge in challenges:
+            table.add_row(
+                str(challenge['id']),
+                challenge['title'][:40],
+                challenge['category'].upper(),
+                challenge['difficulty'],
+                challenge['created_at'][:10]
+            )
+
+        console.print(table)
+
+        # Select challenge
+        challenge_id = ask("\n풀이할 문제 ID", default="")
+        if not challenge_id:
+            return
+
+        try:
+            challenge_id = int(challenge_id)
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
+
+        # Get API profile
+        profiles = self.config.get_all_profiles()
+
+        if not profiles:
+            console.print("[red]API 프로필을 먼저 설정하세요 ('s' 메뉴)[/red]")
+            return
+
+        console.print("\n[yellow]사용할 API 프로필:[/yellow]")
+        for i, profile_name in enumerate(profiles.keys(), 1):
+            profile = profiles[profile_name]
+            console.print(f"  {i}. {profile_name} ({profile.get('provider')}/{profile.get('model')})")
+
+        profile_choice = ask("프로필 선택", default="1")
+
+        try:
+            profile_idx = int(profile_choice) - 1
+            profile_name = list(profiles.keys())[profile_idx]
+            profile = profiles[profile_name]
+        except:
+            console.print("[red]유효한 프로필 번호를 입력하세요.[/red]")
+            return
+
+        # Create CTFSolver
+        from ctf.ctf_core import CTFSolver
+
+        solver = CTFSolver(
+            self.db,
+            provider=profile['provider'],
+            model=profile['model'],
+            api_key=profile['api_key']
+        )
+
+        # Solve challenge
+        console.print(f"\n[cyan]문제 풀이를 시작합니다...[/cyan]")
+
+        result = await solver.solve_challenge(challenge_id, max_retries=3)
+
+        if result.get('success'):
+            console.print(f"\n[bold green]🎉 성공! FLAG: {result.get('flag')}[/bold green]")
+        else:
+            console.print(f"\n[bold red]❌ 실패: {result.get('error')}[/bold red]")
+
+        console.print(f"\n[dim]Execution Log ID: {result.get('log_id')}[/dim]")
+
+    def ctf_list_and_stats(self):
+        """List CTF challenges and statistics"""
+        console.print("\n[bold magenta]🚩 CTF 문제 목록 및 통계[/bold magenta]\n")
+
+        # Statistics
+        stats = self.db.get_ctf_statistics()
+
+        console.print("[bold cyan]📊 전체 통계:[/bold cyan]")
+        console.print(f"  • 총 문제: {stats['total_challenges']}개")
+        console.print(f"  • 해결: {stats['solved_challenges']}개 ({stats['solve_rate']}%)")
+        console.print(f"  • 성공률: {stats['success_rate']}%")
+        console.print(f"  • 평균 시도 횟수: {stats['avg_attempts']}회")
+        console.print(f"  • 평균 소요 시간: {stats['avg_duration']:.2f}초\n")
+
+        # Category stats
+        if stats['category_stats']:
+            console.print("[bold cyan]📈 카테고리별 통계:[/bold cyan]")
+            for cat_stat in stats['category_stats']:
+                solve_rate = (cat_stat['solved'] / cat_stat['total'] * 100) if cat_stat['total'] > 0 else 0
+                console.print(f"  • {cat_stat['category'].upper()}: {cat_stat['solved']}/{cat_stat['total']} ({solve_rate:.1f}%)")
+            console.print()
+
+        # Most used tools
+        if stats['most_used_tools']:
+            console.print("[bold cyan]🔧 자주 사용된 도구:[/bold cyan]")
+            for tool_stat in stats['most_used_tools'][:5]:
+                console.print(f"  • {tool_stat['tool']}: {tool_stat['count']}회")
+            console.print()
+
+        # List challenges
+        console.print("\n[yellow]필터:[/yellow]")
+        console.print("  1. 전체")
+        console.print("  2. 미해결")
+        console.print("  3. 해결")
+
+        filter_choice = ask("선택 (1-3)", default="1")
+
+        status_map = {'1': None, '2': 'pending', '3': 'solved'}
+        status_filter = status_map.get(filter_choice)
+
+        challenges = self.db.get_ctf_challenges(status=status_filter, limit=50)
+
+        if not challenges:
+            console.print("[yellow]문제가 없습니다.[/yellow]")
+            return
+
+        # Show challenges table
+        table = Table(title=f"CTF 문제 목록 ({len(challenges)}개)")
+        table.add_column("ID", style="magenta", justify="right")
+        table.add_column("제목", style="cyan")
+        table.add_column("카테고리", style="green")
+        table.add_column("난이도", style="yellow")
+        table.add_column("상태", style="white")
+        table.add_column("생성일", style="dim")
+
+        for challenge in challenges:
+            status_emoji = {'pending': '⏳', 'solved': '✅', 'failed': '❌'}.get(challenge['status'], '❓')
+
+            table.add_row(
+                str(challenge['id']),
+                challenge['title'][:40],
+                challenge['category'].upper(),
+                challenge['difficulty'],
+                f"{status_emoji} {challenge['status']}",
+                challenge['created_at'][:10]
+            )
+
+        console.print(table)
+
     def settings_api_profiles(self):
         """Manage API profiles"""
         console.print("\n[bold yellow]⚙️  API 프로필 관리[/bold yellow]")
@@ -5230,6 +5689,16 @@ class PromptArsenal:
                     asyncio.run(self.security_code_scanner())
                 elif choice == 'v':
                     self.security_view_results()
+                elif choice == 'y':
+                    asyncio.run(self.security_system_scan())
+                elif choice == 'n':
+                    self.security_system_scan_history()
+                elif choice == 'f':
+                    self.ctf_add_challenge()
+                elif choice == 't':
+                    asyncio.run(self.ctf_auto_solve())
+                elif choice == 'k':
+                    self.ctf_list_and_stats()
                 elif choice == 's':
                     self.settings_api_profiles()
                 elif choice == 'j':

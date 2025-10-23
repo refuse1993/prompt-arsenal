@@ -140,6 +140,23 @@ class ArsenalDB:
             )
         ''')
 
+        # System vulnerability scans table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_scans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target TEXT NOT NULL,
+                scan_type TEXT,
+                start_time TEXT,
+                end_time TEXT,
+                open_ports TEXT,
+                services TEXT,
+                findings TEXT,
+                risk_score INTEGER,
+                llm_analysis TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # Multi-turn evaluations table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS multi_turn_evaluations (
@@ -288,6 +305,53 @@ class ArsenalDB:
             )
         ''')
 
+        # === CTF Auto-Solver Tables ===
+
+        # CTF challenges table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ctf_challenges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                difficulty TEXT,
+                description TEXT,
+                url TEXT,
+                file_path TEXT,
+                host TEXT,
+                port INTEGER,
+                ciphertext TEXT,
+                key TEXT,
+                n TEXT,
+                e TEXT,
+                c TEXT,
+                hints TEXT,
+                flag TEXT,
+                status TEXT DEFAULT 'pending',
+                source TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                solved_at TEXT
+            )
+        ''')
+
+        # CTF execution logs table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ctf_execution_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                challenge_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                success BOOLEAN,
+                flag TEXT,
+                attempts INTEGER DEFAULT 1,
+                duration REAL,
+                tools_used TEXT,
+                llm_provider TEXT,
+                llm_model TEXT,
+                error TEXT,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (challenge_id) REFERENCES ctf_challenges(id)
+            )
+        ''')
+
         # Create indexes for performance optimization
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_test_results_prompt_id ON test_results(prompt_id)')
@@ -300,6 +364,10 @@ class ArsenalDB:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_scans_scan_type ON security_scans(scan_type)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_findings_scan_id ON security_findings(scan_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_findings_severity ON security_findings(severity)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_challenges_category ON ctf_challenges(category)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_challenges_status ON ctf_challenges(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_execution_logs_challenge_id ON ctf_execution_logs(challenge_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_execution_logs_success ON ctf_execution_logs(success)')
 
         conn.commit()
         conn.close()
@@ -1371,4 +1439,327 @@ class ArsenalDB:
             'critical_findings': critical_findings,
             'high_findings': high_findings,
             'avg_scan_duration': round(avg_duration, 2)
+        }
+
+    # === System Vulnerability Scans ===
+
+    def insert_system_scan(self, target: str, scan_type: str, start_time: str,
+                          end_time: str, open_ports: str, services: str,
+                          findings: str, risk_score: int, llm_analysis: str = None) -> int:
+        """Insert system vulnerability scan result"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO system_scans
+            (target, scan_type, start_time, end_time, open_ports, services,
+             findings, risk_score, llm_analysis)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (target, scan_type, start_time, end_time, open_ports, services,
+              findings, risk_score, llm_analysis))
+
+        scan_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return scan_id
+
+    def get_system_scans(self, limit: int = 20) -> List[Dict]:
+        """Get recent system scans"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM system_scans
+            ORDER BY created_at DESC
+            LIMIT ?
+        ''', (limit,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_system_scan_by_id(self, scan_id: int) -> Optional[Dict]:
+        """Get system scan by ID"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM system_scans WHERE id = ?', (scan_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        return dict(row) if row else None
+
+    def get_system_scan_stats(self) -> Dict:
+        """Get system scan statistics"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute('SELECT COUNT(*) FROM system_scans')
+            total_scans = cursor.fetchone()[0]
+
+            cursor.execute('SELECT AVG(risk_score) FROM system_scans')
+            avg_risk = cursor.fetchone()[0] or 0.0
+
+            cursor.execute('SELECT MAX(risk_score) FROM system_scans')
+            max_risk = cursor.fetchone()[0] or 0
+
+            cursor.execute('''
+                SELECT target, COUNT(*) as scan_count
+                FROM system_scans
+                GROUP BY target
+                ORDER BY scan_count DESC
+                LIMIT 5
+            ''')
+            top_targets = [{'target': row[0], 'scan_count': row[1]} for row in cursor.fetchall()]
+
+            conn.close()
+
+            return {
+                'total_scans': total_scans,
+                'avg_risk_score': round(avg_risk, 2),
+                'max_risk_score': max_risk,
+                'top_targets': top_targets
+            }
+        except sqlite3.OperationalError:
+            conn.close()
+            return {
+                'total_scans': 0,
+                'avg_risk_score': 0,
+                'max_risk_score': 0,
+                'top_targets': []
+            }
+
+    # === CTF Auto-Solver Methods ===
+
+    def insert_ctf_challenge(self, challenge_data: Dict) -> int:
+        """Insert CTF challenge"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO ctf_challenges
+            (title, category, difficulty, description, url, file_path, host, port,
+             ciphertext, key, n, e, c, hints, flag, status, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            challenge_data.get('title'),
+            challenge_data.get('category'),
+            challenge_data.get('difficulty'),
+            challenge_data.get('description'),
+            challenge_data.get('url'),
+            challenge_data.get('file_path'),
+            challenge_data.get('host'),
+            challenge_data.get('port'),
+            challenge_data.get('ciphertext'),
+            challenge_data.get('key'),
+            challenge_data.get('n'),
+            challenge_data.get('e'),
+            challenge_data.get('c'),
+            json.dumps(challenge_data.get('hints', [])),
+            challenge_data.get('flag'),
+            challenge_data.get('status', 'pending'),
+            challenge_data.get('source')
+        ))
+
+        challenge_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return challenge_id
+
+    def get_ctf_challenge(self, challenge_id: int) -> Optional[Dict]:
+        """Get CTF challenge by ID"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM ctf_challenges WHERE id = ?', (challenge_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            challenge = dict(row)
+            if challenge.get('hints'):
+                challenge['hints'] = json.loads(challenge['hints'])
+            return challenge
+        return None
+
+    def get_ctf_challenges(self, category: Optional[str] = None,
+                          status: Optional[str] = None, limit: int = 50) -> List[Dict]:
+        """Get CTF challenges with filters"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        query = 'SELECT * FROM ctf_challenges WHERE 1=1'
+        params = []
+
+        if category:
+            query += ' AND category = ?'
+            params.append(category)
+
+        if status:
+            query += ' AND status = ?'
+            params.append(status)
+
+        query += ' ORDER BY created_at DESC LIMIT ?'
+        params.append(limit)
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+
+        challenges = []
+        for row in rows:
+            challenge = dict(row)
+            if challenge.get('hints'):
+                challenge['hints'] = json.loads(challenge['hints'])
+            challenges.append(challenge)
+
+        return challenges
+
+    def update_ctf_challenge_status(self, challenge_id: int, status: str,
+                                   flag: Optional[str] = None):
+        """Update CTF challenge status"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        if status == 'solved':
+            cursor.execute('''
+                UPDATE ctf_challenges
+                SET status = ?, flag = ?, solved_at = ?
+                WHERE id = ?
+            ''', (status, flag, datetime.now().isoformat(), challenge_id))
+        else:
+            cursor.execute('''
+                UPDATE ctf_challenges
+                SET status = ?
+                WHERE id = ?
+            ''', (status, challenge_id))
+
+        conn.commit()
+        conn.close()
+
+    def insert_ctf_execution_log(self, log_data: Dict) -> int:
+        """Insert CTF execution log"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO ctf_execution_logs
+            (challenge_id, category, success, flag, attempts, duration,
+             tools_used, llm_provider, llm_model, error, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            log_data.get('challenge_id'),
+            log_data.get('category'),
+            log_data.get('success'),
+            log_data.get('flag'),
+            log_data.get('attempts'),
+            log_data.get('duration'),
+            json.dumps(log_data.get('tools_used', [])),
+            log_data.get('llm_provider'),
+            log_data.get('llm_model'),
+            log_data.get('error'),
+            log_data.get('timestamp')
+        ))
+
+        log_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return log_id
+
+    def get_ctf_execution_logs(self, challenge_id: Optional[int] = None,
+                               limit: int = 50) -> List[Dict]:
+        """Get CTF execution logs"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if challenge_id:
+            cursor.execute('''
+                SELECT * FROM ctf_execution_logs
+                WHERE challenge_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (challenge_id, limit))
+        else:
+            cursor.execute('''
+                SELECT * FROM ctf_execution_logs
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (limit,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        logs = []
+        for row in rows:
+            log = dict(row)
+            if log.get('tools_used'):
+                log['tools_used'] = json.loads(log['tools_used'])
+            logs.append(log)
+
+        return logs
+
+    def get_ctf_statistics(self) -> Dict:
+        """Get CTF solving statistics"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Total challenges
+        cursor.execute('SELECT COUNT(*) FROM ctf_challenges')
+        total_challenges = cursor.fetchone()[0]
+
+        # Solved challenges
+        cursor.execute('SELECT COUNT(*) FROM ctf_challenges WHERE status = "solved"')
+        solved_challenges = cursor.fetchone()[0]
+
+        # Category breakdown
+        cursor.execute('''
+            SELECT category, COUNT(*) as count,
+                   SUM(CASE WHEN status = "solved" THEN 1 ELSE 0 END) as solved
+            FROM ctf_challenges
+            GROUP BY category
+        ''')
+        category_stats = [{'category': row[0], 'total': row[1], 'solved': row[2]}
+                         for row in cursor.fetchall()]
+
+        # Success rate
+        cursor.execute('SELECT AVG(success) FROM ctf_execution_logs')
+        success_rate = cursor.fetchone()[0] or 0.0
+
+        # Average attempts
+        cursor.execute('SELECT AVG(attempts) FROM ctf_execution_logs')
+        avg_attempts = cursor.fetchone()[0] or 0.0
+
+        # Average duration
+        cursor.execute('SELECT AVG(duration) FROM ctf_execution_logs')
+        avg_duration = cursor.fetchone()[0] or 0.0
+
+        # Most used tools
+        cursor.execute('SELECT tools_used FROM ctf_execution_logs WHERE tools_used IS NOT NULL')
+        all_tools = []
+        for row in cursor.fetchall():
+            if row[0]:
+                all_tools.extend(json.loads(row[0]))
+
+        from collections import Counter
+        tool_counts = Counter(all_tools).most_common(10)
+
+        conn.close()
+
+        return {
+            'total_challenges': total_challenges,
+            'solved_challenges': solved_challenges,
+            'solve_rate': round(solved_challenges / total_challenges * 100, 2) if total_challenges > 0 else 0,
+            'category_stats': category_stats,
+            'success_rate': round(success_rate * 100, 2),
+            'avg_attempts': round(avg_attempts, 2),
+            'avg_duration': round(avg_duration, 2),
+            'most_used_tools': [{'tool': tool, 'count': count} for tool, count in tool_counts]
         }

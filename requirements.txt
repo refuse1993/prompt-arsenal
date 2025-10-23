@@ -33,3 +33,7 @@ pwntools>=4.12.0
 
 # Advanced Adversarial Tools
 foolbox>=3.3.0
+
+# System Vulnerability Scanning
+python3-nmap>=1.6.0
+vulners>=2.1.0

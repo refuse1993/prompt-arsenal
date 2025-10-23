@@ -203,8 +203,22 @@ class GitHubImporter:
         format_type = dataset_info['format']
         category = dataset_info['category']
 
-        response = requests.get(url)
-        response.raise_for_status()
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 404:
+                print(f"⚠️  Dataset not found (404): {dataset_name}")
+                print(f"   URL: {url}")
+                print(f"   Skipping this dataset...\n")
+                return []
+            else:
+                # 다른 HTTP 오류는 다시 발생시킴
+                raise
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️  Network error for {dataset_name}: {e}")
+            print(f"   Skipping this dataset...\n")
+            return []
 
         prompts = []
 
