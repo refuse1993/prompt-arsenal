@@ -3569,6 +3569,15 @@ class PromptArsenal:
 
                     if finding['llm_reasoning']:
                         console.print(f"\n[bold cyan]🤖 LLM 분석:[/bold cyan]")
+
+                        # Show code context again for LLM analysis reference
+                        if code_to_show:
+                            console.print(f"\n[dim]📌 분석 대상 코드:[/dim]")
+                            from rich.syntax import Syntax
+                            syntax = Syntax(code_to_show, detected_lang, theme="monokai", line_numbers=True)
+                            console.print(syntax)
+
+                        console.print(f"\n[bold cyan]💭 분석 내용:[/bold cyan]")
                         console.print(finding['llm_reasoning'])
             except ValueError:
                 console.print("[red]숫자를 입력하세요.[/red]")
