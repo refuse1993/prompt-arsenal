@@ -4420,8 +4420,8 @@ class PromptArsenal:
                 console.print(f"\n[green]✅ 연결 성공![/green]")
                 console.print(f"Provider: {profile['provider']}")
                 console.print(f"Model: {profile['model']}")
-                console.print(f"응답: {result.get('response', 'N/A')[:100]}...")
-                console.print(f"응답 시간: {result.get('response_time', 0):.2f}초")
+                console.print(f"응답: {result.response[:100]}...")
+                console.print(f"응답 시간: {result.response_time:.2f}초")
 
             except Exception as e:
                 console.print(f"\n[red]❌ 연결 실패: {e}[/red]")
