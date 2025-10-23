@@ -1937,7 +1937,7 @@ class PromptArsenal:
                 judgment = await judge.judge(payload, result.response)
 
                 # Save result to DB
-                self.db.insert_text_test_result(
+                self.db.insert_test_result(
                     prompt_id=prompt['id'],
                     provider=profile['provider'],
                     model=profile['model'],
