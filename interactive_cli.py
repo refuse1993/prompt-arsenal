@@ -726,7 +726,7 @@ class PromptArsenal:
 
             console.print("\n[bold]카테고리:[/bold]")
             for idx, cat in enumerate(categories, 1):
-                console.print(f"  [cyan]{idx}.[/cyan] {cat['category']} ({cat['count']}개)")
+                console.print(f"  [cyan]{idx}.[/cyan] {cat['category']} ({cat['prompt_count']}개)")
 
             cat_choice = ask(f"카테고리 선택 (1-{len(categories)})", default="1")
 
@@ -1834,7 +1834,7 @@ class PromptArsenal:
 
         console.print("\n[bold]사용 가능한 카테고리:[/bold]")
         for idx, cat in enumerate(categories, 1):
-            console.print(f"  [cyan]{idx}.[/cyan] {cat['category']} ({cat['count']}개)")
+            console.print(f"  [cyan]{idx}.[/cyan] {cat['category']} ({cat['prompt_count']}개)")
 
         cat_choice = ask(f"\n카테고리 선택 (1-{len(categories)})", default="1")
 
@@ -2022,7 +2022,7 @@ class PromptArsenal:
                 cat_table.add_column("Count", style="yellow", justify="right")
 
                 for idx, cat in enumerate(categories, 1):
-                    cat_table.add_row(str(idx), cat['category'], str(cat['count']))
+                    cat_table.add_row(str(idx), cat['category'], str(cat['prompt_count']))
 
                 console.print(cat_table)
 
@@ -2312,7 +2312,7 @@ class PromptArsenal:
                 cat_table.add_column("Count", style="yellow", justify="right")
 
                 for idx, cat in enumerate(categories, 1):
-                    cat_table.add_row(str(idx), cat['category'], str(cat['count']))
+                    cat_table.add_row(str(idx), cat['category'], str(cat['prompt_count']))
 
                 console.print(cat_table)
 
