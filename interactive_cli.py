@@ -4004,7 +4004,7 @@ class PromptArsenal:
 
                     for idx, m in enumerate(available_models, 1):
                         model_id = m['id']
-                        name = m.get('name', m['id'])
+                        model_name = m.get('name', m['id'])
 
                         # Capabilities 표시
                         caps = m.get('capabilities', [])
@@ -4027,7 +4027,7 @@ class PromptArsenal:
                         # Recommended
                         recommended = "⭐" if m.get('recommended', False) else ""
 
-                        table.add_row(str(idx), model_id, name, cap_str, context, recommended)
+                        table.add_row(str(idx), model_id, model_name, cap_str, context, recommended)
 
                     console.print(table)
 
@@ -4166,10 +4166,10 @@ class PromptArsenal:
 
                         for idx, m in enumerate(available_models, 1):
                             model_id = m['id']
-                            name = m.get('name', m['id'])
+                            model_name = m.get('name', m['id'])
                             is_current = "★" if model_id == current['model'] else ""
 
-                            table.add_row(str(idx), model_id, name, is_current)
+                            table.add_row(str(idx), model_id, model_name, is_current)
 
                         console.print(table)
 
