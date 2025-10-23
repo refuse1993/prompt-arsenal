@@ -288,6 +288,19 @@ class ArsenalDB:
             )
         ''')
 
+        # Create indexes for performance optimization
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_test_results_prompt_id ON test_results(prompt_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_test_results_success ON test_results(success)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_media_arsenal_media_type ON media_arsenal(media_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_media_arsenal_attack_type ON media_arsenal(attack_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_multimodal_test_results_media_id ON multimodal_test_results(media_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_multi_turn_campaigns_status ON multi_turn_campaigns(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_multi_turn_conversations_campaign_id ON multi_turn_conversations(campaign_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_scans_scan_type ON security_scans(scan_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_findings_scan_id ON security_findings(scan_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_security_findings_severity ON security_findings(severity)')
+
         conn.commit()
         conn.close()
 
