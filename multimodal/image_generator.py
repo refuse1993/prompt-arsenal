@@ -244,31 +244,3 @@ class ImageGenerator:
         except Exception as e:
             print(f"Replicate generation failed: {e}")
             return None
-
-
-class MockImageGenerator:
-    """
-    Mock image generator for testing
-
-    Creates placeholder images instead of real generation
-    """
-
-    async def generate(self, prompt: str, output_path: str, **kwargs) -> Optional[str]:
-        """
-        Create a placeholder image file
-
-        Returns path to placeholder
-        """
-        try:
-            # Create placeholder directory
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-            # Create empty file as placeholder
-            with open(output_path, 'w') as f:
-                f.write(f"# Placeholder Image\nPrompt: {prompt}\nGenerated: {datetime.now()}\n")
-
-            return output_path
-
-        except Exception as e:
-            print(f"Mock generation failed: {e}")
-            return None

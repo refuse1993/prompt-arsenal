@@ -185,31 +185,3 @@ class AudioGenerator:
         except Exception as e:
             print(f"Azure TTS generation failed: {e}")
             return None
-
-
-class MockAudioGenerator:
-    """
-    Mock audio generator for testing
-
-    Creates placeholder audio files instead of real generation
-    """
-
-    async def generate(self, text: str, output_path: str, **kwargs) -> Optional[str]:
-        """
-        Create a placeholder audio file
-
-        Returns path to placeholder
-        """
-        try:
-            # Create placeholder directory
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-            # Create empty file as placeholder
-            with open(output_path, 'w') as f:
-                f.write(f"# Placeholder Audio\nText: {text}\nGenerated: {datetime.now()}\n")
-
-            return output_path
-
-        except Exception as e:
-            print(f"Mock generation failed: {e}")
-            return None
