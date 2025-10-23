@@ -553,18 +553,40 @@ class ArsenalDB:
     # === Statistics ===
 
     def get_categories(self) -> List[Dict]:
-        """Get category statistics"""
+        """Get category statistics with success rates"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         cursor.execute('''
-            SELECT category, COUNT(*) as count
-            FROM prompts
-            GROUP BY category
-            ORDER BY count DESC
+            SELECT
+                p.category,
+                COUNT(DISTINCT p.id) as prompt_count,
+                COUNT(tr.id) as test_count,
+                SUM(CASE WHEN tr.success = 1 THEN 1 ELSE 0 END) as success_count,
+                ROUND(AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100, 2) as success_rate,
+                AVG(CASE
+                    WHEN tr.severity = 'high' THEN 3
+                    WHEN tr.severity = 'medium' THEN 2
+                    WHEN tr.severity = 'low' THEN 1
+                    ELSE 0
+                END) as avg_severity
+            FROM prompts p
+            LEFT JOIN test_results tr ON p.id = tr.prompt_id
+            GROUP BY p.category
+            ORDER BY success_rate DESC, test_count DESC
         ''')
 
-        categories = [{'category': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        categories = []
+        for row in cursor.fetchall():
+            categories.append({
+                'category': row[0],
+                'prompt_count': row[1],
+                'test_count': row[2],
+                'success_count': row[3],
+                'success_rate': row[4] if row[4] else 0.0,
+                'avg_severity': row[5] if row[5] else 0.0
+            })
+
         conn.close()
         return categories
 
@@ -593,6 +615,25 @@ class ArsenalDB:
         cursor.execute('SELECT COUNT(*) FROM multimodal_test_results WHERE success = 1')
         successful_multimodal_tests = cursor.fetchone()[0]
 
+        # Campaign stats (check if table exists)
+        total_campaigns = 0
+        completed_campaigns = 0
+        successful_campaigns = 0
+
+        try:
+            cursor.execute('SELECT COUNT(*) FROM multi_turn_campaigns')
+            total_campaigns = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM multi_turn_campaigns WHERE status IN ('completed', 'success', 'failed')")
+            completed_campaigns = cursor.fetchone()[0]
+
+            # Success is determined by status = 'completed'
+            cursor.execute("SELECT COUNT(*) FROM multi_turn_campaigns WHERE status = 'completed'")
+            successful_campaigns = cursor.fetchone()[0]
+        except sqlite3.OperationalError:
+            # multi_turn_campaigns table doesn't exist yet
+            pass
+
         conn.close()
 
         return {
@@ -603,8 +644,125 @@ class ArsenalDB:
             'total_media': total_media,
             'total_multimodal_tests': total_multimodal_tests,
             'successful_multimodal_tests': successful_multimodal_tests,
-            'multimodal_success_rate': (successful_multimodal_tests / total_multimodal_tests * 100) if total_multimodal_tests > 0 else 0
+            'multimodal_success_rate': (successful_multimodal_tests / total_multimodal_tests * 100) if total_multimodal_tests > 0 else 0,
+            'total_campaigns': total_campaigns,
+            'completed_campaigns': completed_campaigns,
+            'successful_campaigns': successful_campaigns,
+            'campaign_success_rate': (successful_campaigns / completed_campaigns * 100) if completed_campaigns > 0 else 0
         }
+
+    def get_top_prompts(self, limit: int = 10) -> List[Dict]:
+        """Get most effective prompts by success rate and usage count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT
+                p.id,
+                p.category,
+                p.payload,
+                p.description,
+                COUNT(tr.id) as test_count,
+                SUM(CASE WHEN tr.success = 1 THEN 1 ELSE 0 END) as success_count,
+                ROUND(AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100, 2) as success_rate,
+                AVG(tr.confidence) as avg_confidence
+            FROM prompts p
+            INNER JOIN test_results tr ON p.id = tr.prompt_id
+            GROUP BY p.id
+            HAVING test_count >= 2
+            ORDER BY success_rate DESC, test_count DESC
+            LIMIT ?
+        ''', (limit,))
+
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'id': row[0],
+                'category': row[1],
+                'payload': row[2],
+                'description': row[3],
+                'test_count': row[4],
+                'success_count': row[5],
+                'success_rate': row[6] if row[6] else 0.0,
+                'avg_confidence': row[7] if row[7] else 0.0
+            })
+
+        conn.close()
+        return results
+
+    def get_model_vulnerabilities(self) -> List[Dict]:
+        """Get vulnerability statistics by provider and model"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT
+                provider,
+                model,
+                COUNT(*) as test_count,
+                SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as success_count,
+                ROUND(AVG(CASE WHEN success = 1 THEN 1.0 ELSE 0.0 END) * 100, 2) as success_rate,
+                AVG(confidence) as avg_confidence,
+                AVG(response_time) as avg_response_time
+            FROM test_results
+            GROUP BY provider, model
+            HAVING test_count >= 3
+            ORDER BY success_rate DESC, test_count DESC
+        ''')
+
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'provider': row[0],
+                'model': row[1],
+                'test_count': row[2],
+                'success_count': row[3],
+                'success_rate': row[4] if row[4] else 0.0,
+                'avg_confidence': row[5] if row[5] else 0.0,
+                'avg_response_time': row[6] if row[6] else 0.0
+            })
+
+        conn.close()
+        return results
+
+    def get_campaign_stats(self) -> List[Dict]:
+        """Get multiturn campaign statistics by strategy"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        results = []
+        try:
+            cursor.execute('''
+                SELECT
+                    mtc.strategy,
+                    COUNT(DISTINCT mtc.id) as total_campaigns,
+                    SUM(CASE WHEN mtc.status = 'completed' THEN 1 ELSE 0 END) as successful_campaigns,
+                    ROUND(AVG(CASE WHEN mtc.status = 'completed' THEN 1.0 ELSE 0.0 END) * 100, 2) as success_rate,
+                    AVG(mtc.turns_used) as avg_turns,
+                    MIN(mtc.turns_used) as min_turns,
+                    MAX(mtc.turns_used) as max_turns
+                FROM multi_turn_campaigns mtc
+                WHERE mtc.status IN ('completed', 'success', 'failed')
+                GROUP BY mtc.strategy
+                ORDER BY success_rate DESC, total_campaigns DESC
+            ''')
+
+            for row in cursor.fetchall():
+                results.append({
+                    'strategy': row[0],
+                    'total_campaigns': row[1],
+                    'successful_campaigns': row[2],
+                    'success_rate': row[3] if row[3] else 0.0,
+                    'avg_turns': row[4] if row[4] else 0.0,
+                    'min_turns': row[5] if row[5] is not None else 0,
+                    'max_turns': row[6] if row[6] is not None else 0
+                })
+        except sqlite3.OperationalError:
+            # multi_turn_campaigns table doesn't exist yet
+            pass
+
+        conn.close()
+        return results
 
     # === Data Management ===
 

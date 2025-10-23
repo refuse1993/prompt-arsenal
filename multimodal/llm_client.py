@@ -49,6 +49,18 @@ class LLMClient:
             return await self._call_anthropic(prompt, system, **kwargs)
         elif self.provider == 'google':
             return await self._call_google(prompt, system, **kwargs)
+        elif self.provider == 'ollama':
+            return await self._call_ollama(prompt, system, **kwargs)
+        elif self.provider == 'cohere':
+            return await self._call_cohere(prompt, system, **kwargs)
+        elif self.provider == 'together':
+            return await self._call_together(prompt, system, **kwargs)
+        elif self.provider == 'huggingface':
+            return await self._call_huggingface(prompt, system, **kwargs)
+        elif self.provider == 'replicate':
+            return await self._call_replicate(prompt, system, **kwargs)
+        elif self.provider == 'local':
+            return await self._call_local(prompt, system, **kwargs)
         else:
             raise ValueError(f"Unsupported provider: {self.provider}")
 
@@ -130,6 +142,180 @@ class LLMClient:
 
         except Exception as e:
             print(f"Google API error: {e}")
+            return ""
+
+    async def _call_ollama(self, prompt: str, system: str = None, **kwargs) -> str:
+        """Call Ollama (local) API"""
+        try:
+            import aiohttp
+
+            base_url = self.config.get('base_url', 'http://localhost:11434')
+
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{base_url}/api/chat",
+                    json={
+                        "model": self.model,
+                        "messages": messages,
+                        "stream": False,
+                        "options": {
+                            "temperature": kwargs.get('temperature', 0.7),
+                            "num_predict": kwargs.get('max_tokens', 2000)
+                        }
+                    }
+                ) as response:
+                    result = await response.json()
+                    return result['message']['content']
+
+        except Exception as e:
+            print(f"Ollama API error: {e}")
+            return ""
+
+    async def _call_cohere(self, prompt: str, system: str = None, **kwargs) -> str:
+        """Call Cohere API"""
+        try:
+            import cohere
+
+            client = cohere.AsyncClient(api_key=self.api_key)
+
+            # Cohere uses preamble instead of system
+            response = await client.chat(
+                model=self.model,
+                message=prompt,
+                preamble=system if system else None,
+                temperature=kwargs.get('temperature', 0.7),
+                max_tokens=kwargs.get('max_tokens', 2000)
+            )
+
+            return response.text
+
+        except Exception as e:
+            print(f"Cohere API error: {e}")
+            return ""
+
+    async def _call_together(self, prompt: str, system: str = None, **kwargs) -> str:
+        """Call Together AI (OpenAI-compatible)"""
+        try:
+            import openai
+
+            client = openai.AsyncOpenAI(
+                api_key=self.api_key,
+                base_url="https://api.together.xyz/v1"
+            )
+
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+
+            response = await client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=kwargs.get('temperature', 0.7),
+                max_tokens=kwargs.get('max_tokens', 2000)
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            print(f"Together AI error: {e}")
+            return ""
+
+    async def _call_huggingface(self, prompt: str, system: str = None, **kwargs) -> str:
+        """Call Hugging Face Inference API"""
+        try:
+            import aiohttp
+
+            # Combine system and user prompt
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"https://api-inference.huggingface.co/models/{self.model}",
+                    headers=headers,
+                    json={
+                        "inputs": full_prompt,
+                        "parameters": {
+                            "temperature": kwargs.get('temperature', 0.7),
+                            "max_new_tokens": kwargs.get('max_tokens', 2000)
+                        }
+                    }
+                ) as response:
+                    result = await response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        return result[0].get('generated_text', '')
+                    return ""
+
+        except Exception as e:
+            print(f"Hugging Face API error: {e}")
+            return ""
+
+    async def _call_replicate(self, prompt: str, system: str = None, **kwargs) -> str:
+        """Call Replicate API"""
+        try:
+            import replicate
+
+            # Combine system and user prompt
+            full_prompt = f"{system}\n\n{prompt}" if system else prompt
+
+            # Run model
+            output = await asyncio.to_thread(
+                replicate.run,
+                self.model,
+                input={
+                    "prompt": full_prompt,
+                    "temperature": kwargs.get('temperature', 0.7),
+                    "max_length": kwargs.get('max_tokens', 2000)
+                }
+            )
+
+            # Handle different output formats
+            if isinstance(output, str):
+                return output
+            elif isinstance(output, list):
+                return ''.join(output)
+            else:
+                return str(output)
+
+        except Exception as e:
+            print(f"Replicate API error: {e}")
+            return ""
+
+    async def _call_local(self, prompt: str, system: str = None, **kwargs) -> str:
+        """Call local OpenAI-compatible API"""
+        try:
+            import openai
+
+            base_url = self.config.get('base_url', 'http://localhost:8000/v1')
+
+            client = openai.AsyncOpenAI(
+                api_key=self.api_key or "dummy-key",
+                base_url=base_url
+            )
+
+            messages = []
+            if system:
+                messages.append({"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+
+            response = await client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=kwargs.get('temperature', 0.7),
+                max_tokens=kwargs.get('max_tokens', 2000)
+            )
+
+            return response.choices[0].message.content
+
+        except Exception as e:
+            print(f"Local API error: {e}")
             return ""
 
 

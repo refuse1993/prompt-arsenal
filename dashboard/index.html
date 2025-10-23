@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Arsenal - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        code, .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            background-color: #0a0a0a;
+            color: #e5e5e5;
+        }
+
+        .card {
+            background: linear-gradient(145deg, #1a1a1a, #0f0f0f);
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: #3a3a3a;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-success {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+
+        .badge-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+        .badge-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+
+        .badge-info {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #1a1a1a;
+            color: #e5e5e5;
+            border: 1px solid #2a2a2a;
+        }
+
+        .btn-secondary:hover {
+            background: #2a2a2a;
+            border-color: #3a3a3a;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+            border: 1px solid #2a2a2a;
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        }
+
+        .stat-card.blue { --accent: #3b82f6; }
+        .stat-card.green { --accent: #10b981; }
+        .stat-card.purple { --accent: #8b5cf6; }
+        .stat-card.orange { --accent: #f59e0b; }
+
+        input, select {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            color: #e5e5e5;
+            padding: 10px 16px;
+            border-radius: 8px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .prompt-card {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .prompt-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .payload-preview {
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #a3a3a3;
+            max-height: 80px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .payload-preview::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            background: linear-gradient(transparent, #0a0a0a);
+        }
+
+        .modal {
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(8px);
+        }
+
+        .modal-content {
+            background: linear-gradient(145deg, #1a1a1a, #0f0f0f);
+            border: 1px solid #2a2a2a;
+            border-radius: 16px;
+            max-width: 800px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a2a;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a3a3a;
+        }
+
+        .glow {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="border-b border-gray-800 bg-black bg-opacity-50 backdrop-blur-lg sticky top-0 z-10">
+            <div class="max-w-7xl mx-auto px-6 py-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                            <span class="text-blue-500">⚡</span>
+                            Prompt Arsenal
+                        </h1>
+                        <p class="text-gray-400 text-sm mt-1">Jailbreak & Adversarial Prompts Database</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="openAddPromptModal()" class="btn btn-success flex items-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            New Prompt
+                        </button>
+                        <button onclick="openSettingsModal()" class="btn btn-secondary flex items-center gap-2">
+                            <i data-lucide="settings" class="w-4 h-4"></i>
+                            Settings
+                        </button>
+                        <div class="border-l border-gray-700 mx-2"></div>
+                        <button onclick="switchTab('prompts')" id="tab-prompts" class="btn btn-primary">
+                            📝 Prompts
+                        </button>
+                        <button onclick="switchTab('multimodal')" id="tab-multimodal" class="btn btn-secondary">
+                            🖼️ Multimodal
+                        </button>
+                        <button onclick="switchTab('campaigns')" id="tab-campaigns" class="btn btn-secondary">
+                            🎯 Campaigns
+                        </button>
+                        <button onclick="refreshData()" class="btn btn-secondary flex items-center gap-2">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-6 py-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card blue">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-3 bg-blue-500 bg-opacity-10 rounded-lg">
+                            <i data-lucide="database" class="w-6 h-6 text-blue-500"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-sm uppercase tracking-wide">Total Prompts</p>
+                        <p id="stat-total" class="text-3xl font-bold text-white mt-2">-</p>
+                    </div>
+                </div>
+
+                <div class="stat-card green">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-3 bg-green-500 bg-opacity-10 rounded-lg">
+                            <i data-lucide="check-circle" class="w-6 h-6 text-green-500"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-sm uppercase tracking-wide">Success Rate</p>
+                        <p id="stat-success-rate" class="text-3xl font-bold text-white mt-2">-</p>
+                    </div>
+                </div>
+
+                <div class="stat-card purple">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-3 bg-purple-500 bg-opacity-10 rounded-lg">
+                            <i data-lucide="activity" class="w-6 h-6 text-purple-500"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-sm uppercase tracking-wide">Total Tests</p>
+                        <p id="stat-tests" class="text-3xl font-bold text-white mt-2">-</p>
+                    </div>
+                </div>
+
+                <div class="stat-card orange">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-3 bg-orange-500 bg-opacity-10 rounded-lg">
+                            <i data-lucide="trending-up" class="w-6 h-6 text-orange-500"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-gray-400 text-sm uppercase tracking-wide">Recent (7d)</p>
+                        <p id="stat-recent" class="text-3xl font-bold text-white mt-2">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search & Filter -->
+            <div class="card p-6 mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <div class="md:col-span-2 lg:col-span-2">
+                        <div class="relative">
+                            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"></i>
+                            <input
+                                type="text"
+                                id="search-input"
+                                placeholder="Search prompts by payload, description, or category..."
+                                class="w-full pl-12 pr-4"
+                                onkeyup="handleSearch(event)"
+                            >
+                        </div>
+                    </div>
+                    <div>
+                        <select id="category-filter" onchange="handleFilter()" class="w-full">
+                            <option value="">All Categories</option>
+                        </select>
+                    </div>
+                    <div>
+                        <select id="success-filter" onchange="handleFilter()" class="w-full">
+                            <option value="">All Success Rates</option>
+                            <option value="tested">Has Tests</option>
+                            <option value="untested">No Tests</option>
+                            <option value="high">High (>70%)</option>
+                            <option value="medium">Medium (30-70%)</option>
+                            <option value="low">Low (<30%)</option>
+                            <option value="failed">Failed (0%)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-2">
+                        <select id="sort-filter" onchange="handleFilter()" class="w-full">
+                            <option value="recent">Most Recent</option>
+                            <option value="success-rate-high">Highest Success Rate</option>
+                            <option value="success-rate-low">Lowest Success Rate</option>
+                            <option value="most-tested">Most Tested</option>
+                            <option value="least-tested">Least Tested</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button onclick="resetFilters()" class="btn btn-secondary w-full flex items-center justify-center gap-2">
+                            <i data-lucide="x-circle" class="w-4 h-4"></i>
+                            Reset Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prompts Grid -->
+            <div id="prompts-container" class="grid grid-cols-1 gap-4">
+                <!-- Prompts will be loaded here -->
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading" class="text-center py-16">
+                <div class="inline-block animate-pulse">
+                    <div class="w-16 h-16 border-4 border-gray-800 border-t-blue-500 rounded-full animate-spin"></div>
+                </div>
+                <p class="mt-6 text-gray-400 text-lg">Loading arsenal...</p>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden text-center py-16">
+                <i data-lucide="inbox" class="w-16 h-16 text-gray-700 mx-auto mb-4"></i>
+                <p class="text-gray-400 text-lg">No prompts found</p>
+                <p class="text-gray-500 text-sm mt-2">Try adjusting your search or filters</p>
+            </div>
+        </main>
+
+        <!-- Detail Modal -->
+        <div id="detail-modal" class="hidden fixed inset-0 modal z-50 flex items-center justify-center p-4 bg-black bg-opacity-75">
+            <div class="modal-content w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-gray-900 rounded-lg">
+                <div class="sticky top-0 bg-gray-900 z-10 p-6 border-b border-gray-800">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <h2 id="detail-category" class="badge badge-info"></h2>
+                                <span id="detail-success-rate" class="text-sm text-gray-400"></span>
+                            </div>
+                            <p id="detail-description" class="text-gray-400 text-sm"></p>
+                        </div>
+                        <button onclick="closeDetail()" class="text-gray-500 hover:text-white transition-colors ml-4">
+                            <i data-lucide="x" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="detail-content" class="p-6 space-y-6">
+                    <!-- Content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        let prompts = [];
+        let categories = [];
+        let stats = {};
+        let currentTab = 'prompts';
+
+        // Global data arrays for button handlers in ui-extensions.js
+        window.promptsData = [];
+        window.multimodalData = [];
+        window.campaignsData = [];
+
+        // Global API URL for ui-extensions.js
+        window.API_URL = 'http://localhost:5002/api';
+        const API_URL = window.API_URL;
+
+        // Make loadData globally accessible for ui-extensions.js
+        window.loadData = async function loadData() {
+            try {
+                // Load stats
+                const statsRes = await fetch(`${API_URL}/stats`);
+                const statsData = await statsRes.json();
+                if (statsData.success) {
+                    stats = statsData.data;
+                    updateStatsCards();
+                }
+
+                // Load categories
+                const categoriesRes = await fetch(`${API_URL}/categories`);
+                const categoriesData = await categoriesRes.json();
+                if (categoriesData.success) {
+                    categories = categoriesData.data;
+                    updateCategoryFilter();
+                }
+
+                // Load prompts
+                const promptsRes = await fetch(`${API_URL}/prompts?limit=200`);
+                const promptsData = await promptsRes.json();
+                if (promptsData.success) {
+                    prompts = promptsData.data;
+                    renderPrompts(prompts);
+                }
+
+                document.getElementById('loading').classList.add('hidden');
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-center">
+                        <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                        <p class="text-red-400 text-lg">Error loading data</p>
+                        <p class="text-gray-500 text-sm mt-2">Make sure API server is running on port 5002</p>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        function updateStatsCards() {
+            document.getElementById('stat-total').textContent = stats.total_prompts?.toLocaleString() || '0';
+            document.getElementById('stat-success-rate').textContent = `${stats.success_rate || 0}%`;
+            document.getElementById('stat-tests').textContent = stats.total_tests?.toLocaleString() || '0';
+            document.getElementById('stat-recent').textContent = stats.recent_tests?.toLocaleString() || '0';
+        }
+
+        function updateCategoryFilter() {
+            const select = document.getElementById('category-filter');
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.name;
+                option.textContent = `${cat.name} (${cat.count})`;
+                select.appendChild(option);
+            });
+        }
+
+        function renderPrompts(data) {
+            const container = document.getElementById('prompts-container');
+            window.promptsData = data;  // Store globally for button handlers
+
+            if (data.length === 0) {
+                container.classList.add('hidden');
+                document.getElementById('empty-state').classList.remove('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+
+            container.innerHTML = data.map(prompt => `
+                <div class="prompt-card">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex gap-2 items-center">
+                            <span class="badge badge-${getCategoryColor(prompt.category)}">${prompt.category}</span>
+                            ${prompt.test_count > 0 ? `
+                                <span class="text-xs text-gray-500">
+                                    ${prompt.success_count}/${prompt.test_count} tests • ${prompt.success_rate.toFixed(0)}% success
+                                </span>
+                            ` : '<span class="text-xs text-gray-500">No tests</span>'}
+                        </div>
+                        <span class="text-xs text-gray-600">#${prompt.id}</span>
+                    </div>
+
+                    <div class="payload-preview mono" onclick="viewPrompt(${prompt.id})" style="cursor: pointer;">
+                        ${escapeHtml(prompt.payload)}
+                    </div>
+
+                    ${prompt.description ? `
+                        <p class="text-sm text-gray-400 mt-3">${escapeHtml(prompt.description)}</p>
+                    ` : ''}
+
+                    <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-800">
+                        <span class="text-xs text-gray-600">${prompt.source || 'Unknown source'}</span>
+                        <span class="text-xs text-gray-600">${new Date(prompt.created_at).toLocaleDateString()}</span>
+                    </div>
+
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="openTestModal(${prompt.id}); event.stopPropagation();" class="btn btn-sm btn-primary flex items-center gap-1">
+                            <i data-lucide="play" class="w-3 h-3"></i>
+                            Test
+                        </button>
+                        <button onclick="openEditPromptModal(${prompt.id}); event.stopPropagation();" class="btn btn-sm btn-secondary flex items-center gap-1">
+                            <i data-lucide="edit" class="w-3 h-3"></i>
+                            Edit
+                        </button>
+                        <button onclick="openVariantsModal(${prompt.id}); event.stopPropagation();" class="btn btn-sm btn-secondary flex items-center gap-1">
+                            <i data-lucide="zap" class="w-3 h-3"></i>
+                            Variants
+                        </button>
+                        <button onclick="if(confirm('Delete this prompt?')) deletePrompt(${prompt.id}); event.stopPropagation();" class="btn btn-sm btn-danger flex items-center gap-1">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        function getCategoryColor(category) {
+            const colors = {
+                'jailbreak': 'danger',
+                'dan': 'warning',
+                'prompt-injection': 'info',
+                'encoding': 'success'
+            };
+            return colors[category] || 'info';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function viewPrompt(id) {
+            console.log('viewPrompt called with ID:', id);
+            try {
+                const res = await fetch(`${API_URL}/prompts/${id}`);
+                const data = await res.json();
+                console.log('API response:', data);
+
+                if (data.success) {
+                    const { prompt, test_results } = data.data;
+
+                    document.getElementById('detail-category').textContent = prompt.category;
+                    document.getElementById('detail-description').textContent = prompt.description || 'No description';
+
+                    if (test_results.length > 0) {
+                        const successCount = test_results.filter(t => t.success).length;
+                        const successRate = (successCount / test_results.length * 100).toFixed(0);
+                        document.getElementById('detail-success-rate').textContent = `${successCount}/${test_results.length} tests passed (${successRate}%)`;
+                    } else {
+                        document.getElementById('detail-success-rate').textContent = 'No tests';
+                    }
+
+                    let content = `
+                        <div class="mb-6">
+                            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Payload</h3>
+                            <div class="payload-preview mono" style="max-height: none;">
+                                ${escapeHtml(prompt.payload)}
+                            </div>
+                        </div>
+                    `;
+
+                    if (test_results.length > 0) {
+                        content += `
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Test Results (${test_results.length})</h3>
+                                <div class="space-y-3">
+                                    ${test_results.map(test => `
+                                        <div class="card p-4">
+                                            <div class="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <span class="badge badge-${test.success ? 'success' : 'danger'} text-xs">
+                                                        ${test.success ? 'Success' : 'Failed'}
+                                                    </span>
+                                                    <span class="text-xs text-gray-500 ml-2">${test.provider} ${test.model}</span>
+                                                </div>
+                                                <span class="text-xs text-gray-600">${new Date(test.tested_at).toLocaleString()}</span>
+                                            </div>
+                                            ${test.response ? `
+                                                <p class="text-sm text-gray-400 mb-2">${escapeHtml(test.response.substring(0, 200))}...</p>
+                                            ` : ''}
+                                            ${test.reasoning ? `
+                                                <p class="text-xs text-gray-500 italic">${escapeHtml(test.reasoning)}</p>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('detail-content').innerHTML = content;
+                    document.getElementById('detail-modal').classList.remove('hidden');
+                    lucide.createIcons();
+                    console.log('Modal opened successfully');
+                } else {
+                    console.error('API returned success: false', data);
+                    alert('Failed to load prompt details!');
+                }
+            } catch (error) {
+                console.error('Error loading prompt detail:', error);
+                alert('Error loading prompt: ' + error.message);
+            }
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-modal').classList.add('hidden');
+        }
+
+        async function handleSearch(event) {
+            if (event.key === 'Enter') {
+                const query = event.target.value.trim();
+                if (query) {
+                    const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    if (data.success) {
+                        renderPrompts(data.data);
+                    }
+                } else {
+                    loadData();
+                }
+            }
+        }
+
+        async function handleFilter() {
+            const category = document.getElementById('category-filter').value;
+            const successFilter = document.getElementById('success-filter').value;
+            const sortFilter = document.getElementById('sort-filter').value;
+
+            // Always fetch fresh data from API
+            let url = `${API_URL}/prompts?limit=200`;
+            if (category) {
+                url += `&category=${encodeURIComponent(category)}`;
+            }
+
+            try {
+                const res = await fetch(url);
+                const resData = await res.json();
+
+                if (!resData.success) {
+                    console.error('API returned error:', resData);
+                    return;
+                }
+
+                let data = resData.data;
+
+                // Update global prompts cache if no category filter
+                if (!category) {
+                    prompts = data;
+                }
+
+                // Apply success rate filter
+                if (successFilter) {
+                    data = data.filter(p => {
+                        switch(successFilter) {
+                            case 'tested':
+                                return p.test_count > 0;
+                            case 'untested':
+                                return p.test_count === 0;
+                            case 'high':
+                                return p.test_count > 0 && p.success_rate > 70;
+                            case 'medium':
+                                return p.test_count > 0 && p.success_rate >= 30 && p.success_rate <= 70;
+                            case 'low':
+                                return p.test_count > 0 && p.success_rate < 30 && p.success_rate > 0;
+                            case 'failed':
+                                return p.test_count > 0 && p.success_rate === 0;
+                            default:
+                                return true;
+                        }
+                    });
+                }
+
+                // Apply sorting
+                switch(sortFilter) {
+                    case 'success-rate-high':
+                        data.sort((a, b) => {
+                            if (a.test_count === 0) return 1;
+                            if (b.test_count === 0) return -1;
+                            return b.success_rate - a.success_rate;
+                        });
+                        break;
+                    case 'success-rate-low':
+                        data.sort((a, b) => {
+                            if (a.test_count === 0) return 1;
+                            if (b.test_count === 0) return -1;
+                            return a.success_rate - b.success_rate;
+                        });
+                        break;
+                    case 'most-tested':
+                        data.sort((a, b) => b.test_count - a.test_count);
+                        break;
+                    case 'least-tested':
+                        data.sort((a, b) => a.test_count - b.test_count);
+                        break;
+                    case 'recent':
+                    default:
+                        data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                        break;
+                }
+
+                console.log(`Filter results: ${data.length} prompts (category: ${category || 'all'}, success: ${successFilter || 'all'})`);
+
+                // Render filtered and sorted data
+                renderPrompts(data);
+
+            } catch (error) {
+                console.error('Error fetching filtered data:', error);
+                return;
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('category-filter').value = '';
+            document.getElementById('success-filter').value = '';
+            document.getElementById('sort-filter').value = 'recent';
+            document.getElementById('search-input').value = '';
+            loadData();
+        }
+
+        async function refreshData() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('prompts-container').innerHTML = '';
+            if (currentTab === 'prompts') await loadData();
+            else if (currentTab === 'multimodal') await loadMultimodalData();
+            else if (currentTab === 'campaigns') await loadCampaignsData();
+        }
+
+        async function switchTab(tab) {
+            currentTab = tab;
+
+            // Update tab buttons
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            document.getElementById(`tab-${tab}`).classList.remove('btn-secondary');
+            document.getElementById(`tab-${tab}`).classList.add('btn-primary');
+
+            // Show loading
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('prompts-container').innerHTML = '';
+
+            // Load data for selected tab
+            if (tab === 'prompts') {
+                await loadData();
+            } else if (tab === 'multimodal') {
+                await loadMultimodalData();
+            } else if (tab === 'campaigns') {
+                await loadCampaignsData();
+            }
+        }
+
+        async function loadMultimodalData() {
+            try {
+                const res = await fetch(`${API_URL}/multimodal?limit=100`);
+                const data = await res.json();
+                if (data.success) {
+                    multimodalData = data.data;
+                    renderMultimodal(multimodalData);
+                }
+                document.getElementById('loading').classList.add('hidden');
+            } catch (error) {
+                console.error('Error loading multimodal:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-center">
+                        <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                        <p class="text-red-400 text-lg">Error loading multimodal data</p>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        async function loadCampaignsData() {
+            try {
+                const res = await fetch(`${API_URL}/campaigns?limit=100`);
+                const data = await res.json();
+                if (data.success) {
+                    campaignsData = data.data;
+                    renderCampaigns(campaignsData);
+                }
+                document.getElementById('loading').classList.add('hidden');
+            } catch (error) {
+                console.error('Error loading campaigns:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div class="text-center">
+                        <i data-lucide="alert-circle" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                        <p class="text-red-400 text-lg">Error loading campaigns</p>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        function renderMultimodal(data) {
+            const container = document.getElementById('prompts-container');
+
+            if (data.length === 0) {
+                container.classList.add('hidden');
+                document.getElementById('empty-state').classList.remove('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+
+            container.innerHTML = data.map(media => `
+                <div class="prompt-card" onclick="viewMultimodal(${media.id})">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex gap-2 items-center">
+                            <span class="badge badge-${getMediaTypeColor(media.media_type)}">${media.media_type}</span>
+                            ${media.attack_type ? `<span class="badge badge-warning">${media.attack_type}</span>` : ''}
+                            ${media.test_count > 0 ? `
+                                <span class="text-xs text-gray-500">
+                                    ${media.success_count}/${media.test_count} tests • ${media.success_rate.toFixed(0)}% success
+                                </span>
+                            ` : '<span class="text-xs text-gray-500">No tests</span>'}
+                        </div>
+                        <span class="text-xs text-gray-600">#${media.id}</span>
+                    </div>
+
+                    <div class="mb-3">
+                        ${media.media_type === 'image' ? `
+                            <img src="/${media.file_path}" class="w-full h-48 object-cover rounded-lg bg-gray-900" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27200%27 height=%27200%27%3E%3Crect fill=%27%23333%27 width=%27200%27 height=%27200%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 dominant-baseline=%27middle%27 text-anchor=%27middle%27 fill=%27%23999%27%3EImage%3C/text%3E%3C/svg%3E'" />
+                        ` : media.media_type === 'audio' ? `
+                            <div class="p-8 bg-gray-900 rounded-lg text-center">
+                                <i data-lucide="volume-2" class="w-12 h-12 mx-auto text-gray-600 mb-2"></i>
+                                <p class="text-sm text-gray-500">Audio File</p>
+                            </div>
+                        ` : media.media_type === 'video' ? `
+                            <div class="p-8 bg-gray-900 rounded-lg text-center">
+                                <i data-lucide="video" class="w-12 h-12 mx-auto text-gray-600 mb-2"></i>
+                                <p class="text-sm text-gray-500">Video File</p>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    ${media.description ? `
+                        <div class="payload-preview mono">
+                            ${escapeHtml(media.description)}
+                        </div>
+                    ` : ''}
+
+                    <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-800">
+                        <span class="text-xs text-gray-600">${media.file_path}</span>
+                        <span class="text-xs text-gray-600">${new Date(media.created_at).toLocaleDateString()}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        function renderCampaigns(data) {
+            const container = document.getElementById('prompts-container');
+
+            if (data.length === 0) {
+                container.classList.add('hidden');
+                document.getElementById('empty-state').classList.remove('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            document.getElementById('empty-state').classList.add('hidden');
+
+            container.innerHTML = data.map(campaign => `
+                <div class="prompt-card" onclick="viewCampaign(${campaign.id})">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex gap-2 items-center">
+                            <span class="badge badge-${getStatusColor(campaign.status)}">${campaign.status}</span>
+                            <span class="text-xs text-gray-500">
+                                ${campaign.turns_used}/${campaign.max_turns} turns
+                            </span>
+                        </div>
+                        <span class="text-xs text-gray-600">#${campaign.id}</span>
+                    </div>
+
+                    <h3 class="text-lg font-semibold text-white mb-2">
+                        ${campaign.name || 'Unnamed Campaign'}
+                    </h3>
+
+                    <div class="payload-preview mono mb-3">
+                        ${escapeHtml(campaign.goal)}
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <p class="text-xs text-gray-600">Strategy</p>
+                            <p class="text-sm text-gray-300">${campaign.strategy}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">Target</p>
+                            <p class="text-sm text-gray-300">${campaign.target_provider} ${campaign.target_model}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-4 border-t border-gray-800">
+                        <span class="text-xs text-gray-600">Started: ${new Date(campaign.started_at).toLocaleString()}</span>
+                        ${campaign.completed_at ? `
+                            <span class="text-xs text-gray-600">Completed: ${new Date(campaign.completed_at).toLocaleString()}</span>
+                        ` : '<span class="text-xs text-orange-500">Running...</span>'}
+                    </div>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        }
+
+        function getMediaTypeColor(type) {
+            const colors = {
+                'image': 'info',
+                'audio': 'success',
+                'video': 'warning'
+            };
+            return colors[type] || 'info';
+        }
+
+        function getStatusColor(status) {
+            const colors = {
+                'success': 'success',
+                'failed': 'danger',
+                'running': 'warning'
+            };
+            return colors[status] || 'info';
+        }
+
+        async function viewMultimodal(id) {
+            try {
+                const res = await fetch(`${API_URL}/multimodal/${id}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    const { media, test_results } = data.data;
+
+                    document.getElementById('detail-category').textContent = `${media.media_type} • ${media.attack_type || 'No category'}`;
+
+                    if (test_results.length > 0) {
+                        const successCount = test_results.filter(t => t.success).length;
+                        const successRate = (successCount / test_results.length * 100).toFixed(0);
+                        document.getElementById('detail-success-rate').textContent = `${successCount}/${test_results.length} tests passed (${successRate}%)`;
+                    } else {
+                        document.getElementById('detail-success-rate').textContent = 'No tests';
+                    }
+
+                    document.getElementById('detail-description').textContent = media.description || 'No description';
+
+                    let content = `
+                        <div class="mb-6">
+                            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Media</h3>
+                            ${media.media_type === 'image' ? `
+                                <img src="/${media.file_path}" class="w-full max-h-96 object-contain rounded-lg bg-gray-900" />
+                            ` : media.media_type === 'audio' ? `
+                                <audio controls class="w-full">
+                                    <source src="/${media.file_path}" type="audio/mpeg">
+                                </audio>
+                            ` : media.media_type === 'video' ? `
+                                <video controls class="w-full max-h-96 rounded-lg bg-gray-900">
+                                    <source src="/${media.file_path}" type="video/mp4">
+                                </video>
+                            ` : ''}
+                        </div>
+                    `;
+
+                    if (test_results.length > 0) {
+                        content += `
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Test Results (${test_results.length})</h3>
+                                <div class="space-y-3">
+                                    ${test_results.map(test => `
+                                        <div class="card p-4">
+                                            <div class="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <span class="badge badge-${test.success ? 'success' : 'danger'} text-xs">
+                                                        ${test.success ? 'Success' : 'Failed'}
+                                                    </span>
+                                                    <span class="text-xs text-gray-500 ml-2">${test.provider} ${test.model}</span>
+                                                </div>
+                                                <span class="text-xs text-gray-600">${new Date(test.tested_at).toLocaleString()}</span>
+                                            </div>
+                                            ${test.vision_response ? `
+                                                <p class="text-sm text-gray-400 mb-2"><strong>Vision:</strong> ${escapeHtml(test.vision_response.substring(0, 200))}...</p>
+                                            ` : ''}
+                                            ${test.response ? `
+                                                <p class="text-sm text-gray-400 mb-2">${escapeHtml(test.response.substring(0, 200))}...</p>
+                                            ` : ''}
+                                            ${test.reasoning ? `
+                                                <p class="text-xs text-gray-500 italic">${escapeHtml(test.reasoning)}</p>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('detail-content').innerHTML = content;
+                    document.getElementById('detail-modal').classList.remove('hidden');
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.error('Error loading multimodal detail:', error);
+            }
+        }
+
+        async function viewCampaign(id) {
+            try {
+                const res = await fetch(`${API_URL}/campaigns/${id}`);
+                const data = await res.json();
+
+                if (data.success) {
+                    const { campaign, turns } = data.data;
+
+                    document.getElementById('detail-category').textContent = `${campaign.strategy} • ${campaign.status}`;
+                    document.getElementById('detail-success-rate').textContent = `${campaign.turns_used}/${campaign.max_turns} turns`;
+                    document.getElementById('detail-description').textContent = campaign.goal;
+
+                    let content = `
+                        <div class="mb-6 grid grid-cols-2 gap-4">
+                            <div class="card p-4">
+                                <p class="text-xs text-gray-600 mb-1">Target</p>
+                                <p class="text-sm text-white">${campaign.target_provider} ${campaign.target_model}</p>
+                            </div>
+                            <div class="card p-4">
+                                <p class="text-xs text-gray-600 mb-1">Duration</p>
+                                <p class="text-sm text-white">${campaign.started_at} - ${campaign.completed_at || 'Running'}</p>
+                            </div>
+                        </div>
+                    `;
+
+                    if (turns.length > 0) {
+                        content += `
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Conversation (${turns.length} turns)</h3>
+                                <div class="space-y-4">
+                                    ${turns.map(turn => `
+                                        <div class="card p-4">
+                                            <div class="flex justify-between items-center mb-3">
+                                                <span class="text-sm font-semibold text-white">Turn ${turn.turn_number + 1}</span>
+                                                ${turn.evaluation ? `
+                                                    <span class="badge badge-${turn.evaluation.goal_achieved ? 'success' : 'danger'} text-xs">
+                                                        ${turn.evaluation.goal_achieved ? 'Goal Achieved' : `Progress: ${(turn.evaluation.progress * 100).toFixed(0)}%`}
+                                                    </span>
+                                                ` : ''}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <p class="text-xs text-gray-600 mb-1">Prompt:</p>
+                                                <div class="payload-preview mono" style="max-height: none;">
+                                                    ${escapeHtml(turn.prompt_text)}
+                                                </div>
+                                            </div>
+
+                                            ${(() => {
+                                                if (!turn.prompt_images) return '';
+
+                                                let images = [];
+                                                try {
+                                                    // Handle JSON array string
+                                                    if (typeof turn.prompt_images === 'string' && turn.prompt_images.startsWith('[')) {
+                                                        images = JSON.parse(turn.prompt_images);
+                                                    } else if (typeof turn.prompt_images === 'string') {
+                                                        // Handle comma-separated string
+                                                        images = turn.prompt_images.split(',').map(s => s.trim()).filter(s => s);
+                                                    } else if (Array.isArray(turn.prompt_images)) {
+                                                        images = turn.prompt_images;
+                                                    }
+
+                                                    if (images.length === 0) return '';
+
+                                                    return `
+                                                        <div class="mb-3">
+                                                            <p class="text-xs text-gray-600 mb-2">Images:</p>
+                                                            <div class="grid grid-cols-2 gap-2">
+                                                                ${images.map(img => {
+                                                                    // Strip absolute path prefix to get relative path
+                                                                    const relativePath = img.replace('/Users/brownkim/Downloads/ACDC/prompt_arsenal/', '');
+                                                                    return `<img src="/${relativePath}" class="w-full h-32 object-cover rounded-lg border border-gray-700" onerror="this.style.display='none'" />`;
+                                                                }).join('')}
+                                                            </div>
+                                                        </div>
+                                                    `;
+                                                } catch (e) {
+                                                    console.error('Error parsing images:', e);
+                                                    return '';
+                                                }
+                                            })()}
+
+                                            ${turn.prompt_audio && turn.prompt_audio !== 'null' && turn.prompt_audio !== '[]' ? (() => {
+                                                const audioPath = turn.prompt_audio.replace('/Users/brownkim/Downloads/ACDC/prompt_arsenal/', '');
+                                                return `
+                                                    <div class="mb-3">
+                                                        <p class="text-xs text-gray-600 mb-2">Audio:</p>
+                                                        <audio controls class="w-full">
+                                                            <source src="/${audioPath}" type="audio/mpeg">
+                                                        </audio>
+                                                    </div>
+                                                `;
+                                            })() : ''}
+
+                                            ${turn.prompt_video && turn.prompt_video !== 'null' && turn.prompt_video !== '[]' ? (() => {
+                                                const videoPath = turn.prompt_video.replace('/Users/brownkim/Downloads/ACDC/prompt_arsenal/', '');
+                                                return `
+                                                    <div class="mb-3">
+                                                        <p class="text-xs text-gray-600 mb-2">Video:</p>
+                                                        <video controls class="w-full max-h-64 rounded-lg bg-gray-900">
+                                                            <source src="/${videoPath}" type="video/mp4">
+                                                        </video>
+                                                    </div>
+                                                `;
+                                            })() : ''}
+
+                                            <div>
+                                                <p class="text-xs text-gray-600 mb-1">Response:</p>
+                                                <p class="text-sm text-gray-400">${escapeHtml(turn.response.substring(0, 300))}...</p>
+                                            </div>
+
+                                            ${turn.evaluation?.reasoning ? `
+                                                <div class="mt-3 pt-3 border-t border-gray-800">
+                                                    <p class="text-xs text-gray-500 italic">${escapeHtml(turn.evaluation.reasoning)}</p>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    document.getElementById('detail-content').innerHTML = content;
+                    document.getElementById('detail-modal').classList.remove('hidden');
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.error('Error loading campaign detail:', error);
+            }
+        }
+
+        // Close modal on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeDetail();
+        });
+
+        // Load data on page load
+        loadData();
+    </script>
+
+    <!-- Prompt Add/Edit Modal -->
+    <div id="prompt-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-gray-900 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex justify-between items-center">
+                    <h2 id="prompt-modal-title" class="text-2xl font-bold text-white">Add New Prompt</h2>
+                    <button onclick="closePromptModal()" class="text-gray-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-400 mb-2">Category *</label>
+                        <input id="prompt-form-category" type="text" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none" placeholder="e.g., jailbreak, dan, prompt-injection">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-400 mb-2">Payload *</label>
+                        <textarea id="prompt-form-payload" rows="8" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm" placeholder="Enter the prompt payload..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-400 mb-2">Description</label>
+                        <textarea id="prompt-form-description" rows="3" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none" placeholder="Brief description (optional)"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-400 mb-2">Tags</label>
+                        <input id="prompt-form-tags" type="text" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none" placeholder="Comma-separated tags (optional)">
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button onclick="savePrompt()" class="btn btn-primary flex-1">Save</button>
+                    <button onclick="closePromptModal()" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Modal -->
+    <div id="test-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-white">Test Prompt</h2>
+                    <button onclick="closeTestModal()" class="text-gray-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-400 mb-2">Prompt Preview</label>
+                    <div id="test-prompt-preview" class="bg-gray-800 p-4 rounded-lg mono text-sm text-gray-300 max-h-32 overflow-y-auto"></div>
+                </div>
+
+                <input type="hidden" id="test-prompt-id">
+                <input type="hidden" id="test-prompt-text">
+
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-400 mb-2">Select API Profile</label>
+                    <select id="test-profile-select" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none">
+                        <option value="">-- Select Profile --</option>
+                    </select>
+                </div>
+
+                <button id="test-run-btn" onclick="runTest()" class="btn btn-primary w-full mb-6">
+                    <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>
+                    Run Test
+                </button>
+
+                <div id="test-result-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings/Profiles Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-white">API Profiles</h2>
+                    <button onclick="closeSettingsModal()" class="text-gray-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="mb-8">
+                    <h3 class="text-lg font-semibold text-white mb-4">Existing Profiles</h3>
+                    <div id="profiles-list" class="space-y-3">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-800 pt-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">Create New Profile</h3>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-400 mb-2">Profile Name *</label>
+                                <input id="profile-name" type="text" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none" placeholder="e.g., my-gpt4">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-400 mb-2">Provider *</label>
+                                <select id="profile-provider" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none">
+                                    <option value="">-- Select --</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="local">Local LLM</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-400 mb-2">Model *</label>
+                            <input id="profile-model" type="text" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none" placeholder="e.g., gpt-4o-mini, claude-3-5-sonnet-20241022">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-400 mb-2">API Key</label>
+                            <input id="profile-api-key" type="password" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none" placeholder="Optional for local models">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-400 mb-2">Base URL</label>
+                            <input id="profile-base-url" type="text" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none" placeholder="Optional, for custom endpoints">
+                        </div>
+                        <button onclick="createProfile()" class="btn btn-primary w-full">Create Profile</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Variants Generation Modal -->
+    <div id="variants-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-gray-800">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-white">Generate Variants</h2>
+                    <button onclick="closeVariantsModal()" class="text-gray-500 hover:text-white">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-400 mb-2">Base Payload</label>
+                    <textarea id="variants-base-payload" rows="6" class="w-full bg-gray-800 text-white px-4 py-2 rounded-lg border border-gray-700 focus:border-blue-500 focus:outline-none font-mono text-sm" readonly></textarea>
+                </div>
+
+                <input type="hidden" id="variants-category">
+
+                <div class="mb-6">
+                    <label class="block text-sm font-semibold text-gray-400 mb-2">Select Strategies</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                            <input type="checkbox" name="variant-strategy" value="base64" class="form-checkbox text-blue-500">
+                            <span class="text-sm">Base64 Encoding</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                            <input type="checkbox" name="variant-strategy" value="rot13" class="form-checkbox text-blue-500">
+                            <span class="text-sm">ROT13</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                            <input type="checkbox" name="variant-strategy" value="leet" class="form-checkbox text-blue-500">
+                            <span class="text-sm">Leet Speak</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                            <input type="checkbox" name="variant-strategy" value="unicode" class="form-checkbox text-blue-500">
+                            <span class="text-sm">Unicode Escape</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                            <input type="checkbox" name="variant-strategy" value="character_insertion" class="form-checkbox text-blue-500">
+                            <span class="text-sm">Character Insertion</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-white cursor-pointer">
+                            <input type="checkbox" name="variant-strategy" value="case_variation" class="form-checkbox text-blue-500">
+                            <span class="text-sm">Case Variation</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button onclick="generateVariants()" class="btn btn-primary w-full mb-6">
+                    <i data-lucide="zap" class="w-4 h-4 inline mr-2"></i>
+                    Generate Variants
+                </button>
+
+                <div id="variants-result-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include UI Extensions -->
+    <script src="ui-extensions.js"></script>
+</body>
+</html>

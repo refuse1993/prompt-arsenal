@@ -274,6 +274,118 @@ class PromptArsenal:
                     {"id": "pika-1.0", "name": "Pika 1.0", "capabilities": ["text-to-video", "image-to-video"]}
                 ]
 
+            # LLM providers added in llm_client.py
+            elif provider == "ollama":
+                # Ollama local API - GET /api/tags
+                try:
+                    import requests
+                    url = base_url or "http://localhost:11434"
+                    response = requests.get(f"{url}/api/tags", timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        models = data.get('models', [])
+                        return [
+                            {
+                                "id": m['name'],
+                                "name": m['name'],
+                                "size": m.get('size', 'unknown'),
+                                "modified": m.get('modified_at', 'unknown')
+                            }
+                            for m in models
+                        ]
+                    else:
+                        console.print(f"[yellow]Ollama 서버 응답 실패. 직접 모델명 입력하세요.[/yellow]")
+                        return []
+                except Exception as e:
+                    console.print(f"[yellow]Ollama 연결 실패 ({e}). 직접 모델명 입력하세요.[/yellow]")
+                    return []
+
+            elif provider == "cohere":
+                # Cohere - 공식 모델 리스트 API 없음, 하드코딩
+                return [
+                    {"id": "command-r-plus", "name": "Command R+", "capabilities": ["text", "chat"], "context": "128K", "recommended": True},
+                    {"id": "command-r", "name": "Command R", "capabilities": ["text", "chat"], "context": "128K", "recommended": True},
+                    {"id": "command", "name": "Command", "capabilities": ["text", "chat"], "context": "4K", "recommended": False},
+                    {"id": "command-light", "name": "Command Light", "capabilities": ["text", "chat"], "context": "4K", "recommended": False},
+                    {"id": "command-nightly", "name": "Command Nightly", "capabilities": ["text", "chat"], "context": "128K", "recommended": False}
+                ]
+
+            elif provider == "together":
+                # Together AI - OpenAI-compatible /models endpoint
+                try:
+                    import openai
+                    client = openai.OpenAI(
+                        api_key=api_key,
+                        base_url="https://api.together.xyz/v1"
+                    )
+                    models = client.models.list()
+                    return [
+                        {
+                            "id": m.id,
+                            "name": m.id,
+                            "created": m.created
+                        }
+                        for m in models.data
+                    ]
+                except Exception as e:
+                    console.print(f"[yellow]Together AI 모델 조회 실패 ({e}). 인기 모델 표시합니다.[/yellow]")
+                    # 인기 모델 하드코딩
+                    return [
+                        {"id": "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo", "name": "Llama 3.1 405B Instruct", "recommended": True},
+                        {"id": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "name": "Llama 3.1 70B Instruct", "recommended": True},
+                        {"id": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", "name": "Llama 3.1 8B Instruct", "recommended": False},
+                        {"id": "mistralai/Mixtral-8x7B-Instruct-v0.1", "name": "Mixtral 8x7B Instruct", "recommended": False},
+                        {"id": "Qwen/Qwen2.5-72B-Instruct-Turbo", "name": "Qwen 2.5 72B Instruct", "recommended": False}
+                    ]
+
+            elif provider == "huggingface":
+                # Hugging Face - 실시간 조회 어려움, 인기 모델 하드코딩
+                console.print("[yellow]Hugging Face는 모델 ID를 직접 입력해야 합니다.[/yellow]")
+                console.print("[dim]예시: meta-llama/Llama-2-7b-chat-hf, mistralai/Mistral-7B-Instruct-v0.2[/dim]")
+                return [
+                    {"id": "meta-llama/Llama-2-70b-chat-hf", "name": "Llama 2 70B Chat", "recommended": True},
+                    {"id": "meta-llama/Llama-2-13b-chat-hf", "name": "Llama 2 13B Chat", "recommended": False},
+                    {"id": "meta-llama/Llama-2-7b-chat-hf", "name": "Llama 2 7B Chat", "recommended": False},
+                    {"id": "mistralai/Mistral-7B-Instruct-v0.2", "name": "Mistral 7B Instruct v0.2", "recommended": True},
+                    {"id": "mistralai/Mixtral-8x7B-Instruct-v0.1", "name": "Mixtral 8x7B Instruct", "recommended": False},
+                    {"id": "tiiuae/falcon-180B-chat", "name": "Falcon 180B Chat", "recommended": False},
+                    {"id": "custom", "name": "🔧 직접 입력...", "custom": True}
+                ]
+
+            elif provider == "replicate":
+                # Replicate - 인기 모델 하드코딩 (API 조회는 복잡함)
+                console.print("[yellow]Replicate는 모델 버전 ID를 직접 입력하는 것을 권장합니다.[/yellow]")
+                console.print("[dim]예시: meta/llama-2-70b-chat:02e509c789964a7ea8736978a43525956ef40397be9033abf9fd2badfe68c9e3[/dim]")
+                return [
+                    {"id": "meta/llama-2-70b-chat", "name": "Llama 2 70B Chat", "recommended": True},
+                    {"id": "meta/llama-2-13b-chat", "name": "Llama 2 13B Chat", "recommended": False},
+                    {"id": "mistralai/mistral-7b-instruct-v0.2", "name": "Mistral 7B Instruct v0.2", "recommended": True},
+                    {"id": "mistralai/mixtral-8x7b-instruct-v0.1", "name": "Mixtral 8x7B Instruct", "recommended": False},
+                    {"id": "custom", "name": "🔧 직접 입력...", "custom": True}
+                ]
+
+            elif provider == "local":
+                # Local OpenAI-compatible API - /models endpoint
+                try:
+                    import openai
+                    url = base_url or "http://localhost:8000/v1"
+                    client = openai.OpenAI(
+                        api_key=api_key or "dummy-key",
+                        base_url=url
+                    )
+                    models = client.models.list()
+                    return [
+                        {
+                            "id": m.id,
+                            "name": m.id,
+                            "created": getattr(m, 'created', 'unknown')
+                        }
+                        for m in models.data
+                    ]
+                except Exception as e:
+                    console.print(f"[yellow]Local API 연결 실패 ({e}). 직접 모델명 입력하세요.[/yellow]")
+                    return []
+
             else:
                 return []
 
@@ -1182,23 +1294,219 @@ class PromptArsenal:
 
     def recon_stats(self):
         """Show statistics"""
-        console.print("\n[bold yellow]통계 조회[/bold yellow]")
+        console.print("\n[bold yellow]📊 Arsenal 통합 통계 대시보드[/bold yellow]")
 
+        # === 1. 전체 개요 ===
         stats = self.db.get_stats()
 
-        table = Table(title="Prompt Arsenal Statistics")
-        table.add_column("Metric", style="cyan")
-        table.add_column("Value", style="green")
+        overview_table = Table(title="📋 전체 개요", show_header=True, header_style="bold magenta")
+        overview_table.add_column("구분", style="cyan", width=20)
+        overview_table.add_column("총 개수", style="white", justify="right", width=12)
+        overview_table.add_column("테스트", style="yellow", justify="right", width=12)
+        overview_table.add_column("성공", style="green", justify="right", width=12)
+        overview_table.add_column("성공률", style="bold green", justify="right", width=12)
 
-        table.add_row("Text Prompts", str(stats['total_prompts']))
-        table.add_row("Text Tests", str(stats['total_tests']))
-        table.add_row("Text Success Rate", f"{stats['text_success_rate']:.2f}%")
-        table.add_row("", "")
-        table.add_row("Media Arsenal", str(stats['total_media']))
-        table.add_row("Multimodal Tests", str(stats['total_multimodal_tests']))
-        table.add_row("Multimodal Success Rate", f"{stats['multimodal_success_rate']:.2f}%")
+        overview_table.add_row(
+            "📝 Text Prompts",
+            str(stats['total_prompts']),
+            str(stats['total_tests']),
+            str(stats['successful_tests']),
+            f"{stats['text_success_rate']:.1f}%"
+        )
+        overview_table.add_row(
+            "🎬 Multimodal Media",
+            str(stats['total_media']),
+            str(stats['total_multimodal_tests']),
+            str(stats['successful_multimodal_tests']),
+            f"{stats['multimodal_success_rate']:.1f}%"
+        )
+        overview_table.add_row(
+            "🎯 Multiturn Campaigns",
+            str(stats['total_campaigns']),
+            str(stats['completed_campaigns']),
+            str(stats['successful_campaigns']),
+            f"{stats['campaign_success_rate']:.1f}%"
+        )
 
-        console.print(table)
+        console.print(overview_table)
+
+        # === 2. 카테고리별 효과성 ===
+        console.print("\n[bold cyan]💡 카테고리별 효과성 분석[/bold cyan]")
+        categories = self.db.get_categories()
+
+        if categories:
+            cat_table = Table(show_header=True, header_style="bold magenta")
+            cat_table.add_column("Rank", style="dim", width=6, justify="right")
+            cat_table.add_column("Category", style="cyan", width=25)
+            cat_table.add_column("Prompts", style="white", justify="right", width=10)
+            cat_table.add_column("Tests", style="yellow", justify="right", width=10)
+            cat_table.add_column("Success", style="green", justify="right", width=10)
+            cat_table.add_column("Success Rate", style="bold green", justify="right", width=14)
+            cat_table.add_column("Severity", style="red", justify="right", width=10)
+
+            for idx, cat in enumerate(categories[:15], 1):  # Top 15
+                # Success rate color coding
+                success_rate = cat['success_rate']
+                if success_rate >= 70:
+                    rate_style = "bold green"
+                    rate_icon = "🔥"
+                elif success_rate >= 40:
+                    rate_style = "yellow"
+                    rate_icon = "⚡"
+                elif success_rate > 0:
+                    rate_style = "white"
+                    rate_icon = "💫"
+                else:
+                    rate_style = "dim"
+                    rate_icon = "❌"
+
+                # Severity display
+                severity = cat['avg_severity']
+                if severity >= 2.5:
+                    sev_display = "HIGH"
+                    sev_style = "bold red"
+                elif severity >= 1.5:
+                    sev_display = "MED"
+                    sev_style = "yellow"
+                elif severity > 0:
+                    sev_display = "LOW"
+                    sev_style = "green"
+                else:
+                    sev_display = "-"
+                    sev_style = "dim"
+
+                cat_table.add_row(
+                    f"#{idx}",
+                    cat['category'][:23] + "..." if len(cat['category']) > 23 else cat['category'],
+                    str(cat['prompt_count']),
+                    str(cat['test_count']),
+                    str(cat['success_count']),
+                    f"[{rate_style}]{rate_icon} {success_rate:.1f}%[/{rate_style}]",
+                    f"[{sev_style}]{sev_display}[/{sev_style}]"
+                )
+
+            console.print(cat_table)
+        else:
+            console.print("[dim]카테고리 데이터 없음[/dim]")
+
+        # === 3. Top 성공 프롬프트 ===
+        console.print("\n[bold cyan]🏆 가장 효과적인 프롬프트 Top 10[/bold cyan]")
+        top_prompts = self.db.get_top_prompts(limit=10)
+
+        if top_prompts:
+            top_table = Table(show_header=True, header_style="bold magenta")
+            top_table.add_column("Rank", style="dim", width=6, justify="right")
+            top_table.add_column("Category", style="cyan", width=18)
+            top_table.add_column("Payload Preview", style="white", width=50)
+            top_table.add_column("Tests", style="yellow", justify="right", width=8)
+            top_table.add_column("Success Rate", style="bold green", justify="right", width=14)
+            top_table.add_column("Confidence", style="magenta", justify="right", width=12)
+
+            for idx, prompt in enumerate(top_prompts, 1):
+                # Medal icons
+                if idx == 1:
+                    rank_display = "🥇"
+                elif idx == 2:
+                    rank_display = "🥈"
+                elif idx == 3:
+                    rank_display = "🥉"
+                else:
+                    rank_display = f"#{idx}"
+
+                payload_preview = prompt['payload'][:48] + "..." if len(prompt['payload']) > 48 else prompt['payload']
+
+                top_table.add_row(
+                    rank_display,
+                    prompt['category'][:16] + "..." if len(prompt['category']) > 16 else prompt['category'],
+                    payload_preview,
+                    str(prompt['test_count']),
+                    f"{prompt['success_rate']:.1f}%",
+                    f"{prompt['avg_confidence']:.2f}"
+                )
+
+            console.print(top_table)
+        else:
+            console.print("[dim]충분한 테스트 데이터 없음 (최소 2회 이상 테스트 필요)[/dim]")
+
+        # === 4. 모델별 취약점 ===
+        console.print("\n[bold cyan]🛡️ 모델별 취약점 분석[/bold cyan]")
+        vulnerabilities = self.db.get_model_vulnerabilities()
+
+        if vulnerabilities:
+            vuln_table = Table(show_header=True, header_style="bold magenta")
+            vuln_table.add_column("Rank", style="dim", width=6, justify="right")
+            vuln_table.add_column("Provider", style="cyan", width=15)
+            vuln_table.add_column("Model", style="white", width=30)
+            vuln_table.add_column("Tests", style="yellow", justify="right", width=8)
+            vuln_table.add_column("Success Rate", style="bold red", justify="right", width=14)
+            vuln_table.add_column("Avg Confidence", style="magenta", justify="right", width=14)
+            vuln_table.add_column("Avg Time", style="blue", justify="right", width=10)
+
+            for idx, vuln in enumerate(vulnerabilities[:10], 1):  # Top 10 most vulnerable
+                # Vulnerability level
+                success_rate = vuln['success_rate']
+                if success_rate >= 70:
+                    vuln_icon = "🚨"  # Critical
+                elif success_rate >= 40:
+                    vuln_icon = "⚠️"   # High
+                elif success_rate > 0:
+                    vuln_icon = "💡"  # Medium
+                else:
+                    vuln_icon = "✅"  # Secure
+
+                vuln_table.add_row(
+                    f"#{idx}",
+                    vuln['provider'],
+                    vuln['model'][:28] + "..." if len(vuln['model']) > 28 else vuln['model'],
+                    str(vuln['test_count']),
+                    f"{vuln_icon} {success_rate:.1f}%",
+                    f"{vuln['avg_confidence']:.2f}",
+                    f"{vuln['avg_response_time']:.2f}s"
+                )
+
+            console.print(vuln_table)
+        else:
+            console.print("[dim]모델별 테스트 데이터 없음 (최소 3회 이상 테스트 필요)[/dim]")
+
+        # === 5. 캠페인 전략별 성공률 ===
+        console.print("\n[bold cyan]🎯 Multiturn 전략별 성공률[/bold cyan]")
+        campaign_stats = self.db.get_campaign_stats()
+
+        if campaign_stats:
+            campaign_table = Table(show_header=True, header_style="bold magenta")
+            campaign_table.add_column("Strategy", style="cyan", width=25)
+            campaign_table.add_column("Campaigns", style="white", justify="right", width=12)
+            campaign_table.add_column("Success", style="green", justify="right", width=10)
+            campaign_table.add_column("Success Rate", style="bold green", justify="right", width=14)
+            campaign_table.add_column("Avg Turns", style="yellow", justify="right", width=12)
+            campaign_table.add_column("Min-Max", style="blue", justify="right", width=12)
+
+            for camp in campaign_stats:
+                # Success rate icon
+                success_rate = camp['success_rate']
+                if success_rate >= 70:
+                    icon = "🔥"
+                elif success_rate >= 40:
+                    icon = "⚡"
+                elif success_rate > 0:
+                    icon = "💫"
+                else:
+                    icon = "❌"
+
+                campaign_table.add_row(
+                    camp['strategy'],
+                    str(camp['total_campaigns']),
+                    str(camp['successful_campaigns']),
+                    f"{icon} {success_rate:.1f}%",
+                    f"{camp['avg_turns']:.1f}",
+                    f"{camp['min_turns']}-{camp['max_turns']}"
+                )
+
+            console.print(campaign_table)
+        else:
+            console.print("[dim]완료된 캠페인 데이터 없음[/dim]")
+
+        console.print("\n[dim]💡 Tip: 성공률 높은 카테고리와 프롬프트를 우선 활용하세요![/dim]")
 
     def recon_multimodal_test_results(self):
         """View test results (text + multimodal)"""
@@ -2909,7 +3217,12 @@ class PromptArsenal:
                     try:
                         idx = int(model_choice) - 1
                         if 0 <= idx < len(available_models):
-                            model = available_models[idx]['id']
+                            selected_model = available_models[idx]
+                            # "custom" 옵션 체크 (직접 입력)
+                            if selected_model.get('custom', False):
+                                model = ask("모델명 입력")
+                            else:
+                                model = selected_model['id']
                         else:
                             console.print("[red]잘못된 선택입니다.[/red]")
                             return
@@ -3327,13 +3640,19 @@ class PromptArsenal:
         console.print("  [green]2[/green]. Improved Visual Storytelling (🆕 가드레일 우회, 멀티모달)")
         console.print("  [green]3[/green]. Crescendo (65-70% 성공률, 점진적 escalation)")
         console.print("  [green]4[/green]. Roleplay (60-70% 성공률, 시나리오 기반)")
+        console.print("  [green]5[/green]. FigStep (82.5% 성공률, 타이포그래피 기반, AAAI 2025)")
+        console.print("  [green]6[/green]. MML Attack (97.8% 성공률, 크로스모달, GPT-4o)")
+        console.print("  [green]7[/green]. Visual-RolePlay (85%+ 성공률, 캐릭터 기반, 2024)")
 
-        strategy_choice = ask("전략", choices=["1", "2", "3", "4"])
+        strategy_choice = ask("전략", choices=["1", "2", "3", "4", "5", "6", "7"])
         strategy_map = {
             "1": "visual_storytelling",
             "2": "improved_visual_storytelling",
             "3": "crescendo",
-            "4": "roleplay"
+            "4": "roleplay",
+            "5": "figstep",
+            "6": "mml_attack",
+            "7": "visual_roleplay"
         }
         strategy_name = strategy_map[strategy_choice]
 
@@ -3474,7 +3793,10 @@ class PromptArsenal:
             VisualStorytellingStrategy,
             ImprovedVisualStorytellingStrategy,
             CrescendoStrategy,
-            RoleplayStrategy
+            RoleplayStrategy,
+            FigStepStrategy,
+            MMLAttackStrategy,
+            VisualRolePlayStrategy
         )
 
         # Create LLM clients
@@ -3628,6 +3950,15 @@ class PromptArsenal:
                 db=self.db,
                 llm_client=strategy_llm
             )
+
+        elif strategy_name == "figstep":
+            strategy = FigStepStrategy()
+
+        elif strategy_name == "mml_attack":
+            strategy = MMLAttackStrategy()
+
+        elif strategy_name == "visual_roleplay":
+            strategy = VisualRolePlayStrategy()
 
         # Create orchestrator
         orchestrator = MultiTurnOrchestrator(
