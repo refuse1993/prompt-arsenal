@@ -20,6 +20,9 @@ torchvision>=0.15.0
 
 # Security Testing
 garak>=0.9.0
+semgrep>=1.45.0
+bandit>=1.7.5
+ruff>=0.1.0
 
 # Payload Tools
 pwntools>=4.12.0

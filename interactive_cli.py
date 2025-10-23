@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Prompt Arsenal - Interactive CLI
 AI Security Red Teaming Framework
@@ -10,6 +11,20 @@ from rich.table import Table
 from rich import print as rprint
 import asyncio
 import os
+import sys
+import readline  # 한글 입력 개선
+
+# 터미널 인코딩 설정 (한글 입력 지원)
+if hasattr(sys.stdin, 'reconfigure'):
+    sys.stdin.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+# readline 설정 (한글 backspace 개선)
+try:
+    readline.parse_and_bind('set enable-bracketed-paste off')
+except:
+    pass
 
 from core.database import ArsenalDB
 from core.config import Config
@@ -19,14 +34,21 @@ console = Console()
 
 
 def ask(prompt, default=None, choices=None):
-    """Simple input wrapper"""
+    """Simple input wrapper with encoding error handling"""
     if default:
         prompt_text = f"{prompt} ({default}): "
     else:
         prompt_text = f"{prompt}: "
 
     while True:
-        response = input(prompt_text).strip()
+        try:
+            response = input(prompt_text).strip()
+        except UnicodeDecodeError:
+            console.print("[red]입력 인코딩 오류. 다시 시도하세요.[/red]")
+            continue
+        except EOFError:
+            return default or ""
+
         if not response and default:
             return default
         if choices and response not in choices:
@@ -36,7 +58,7 @@ def ask(prompt, default=None, choices=None):
 
 
 def confirm(prompt, default=None):
-    """Simple yes/no confirmation"""
+    """Simple yes/no confirmation with encoding error handling"""
     if default is True:
         prompt_text = f"{prompt} [Y/n]: "
     elif default is False:
@@ -45,7 +67,13 @@ def confirm(prompt, default=None):
         prompt_text = f"{prompt} [y/n]: "
 
     while True:
-        response = input(prompt_text).strip().lower()
+        try:
+            response = input(prompt_text).strip().lower()
+        except UnicodeDecodeError:
+            console.print("[red]입력 인코딩 오류. 다시 시도하세요.[/red]")
+            continue
+        except EOFError:
+            return default if default is not None else False
 
         # 빈 입력 시 default 반환
         if not response and default is not None:
@@ -502,6 +530,10 @@ class PromptArsenal:
   [green]0[/green]. Multi-Turn 공격 캠페인 (Visual Storytelling, Crescendo, Roleplay)
   [green]c[/green]. 캠페인 목록 및 결과 조회
 
+[bold yellow]🛡️  SECURITY (보안 스캔)[/bold yellow]
+  [green]a[/green]. 코드 취약점 스캔 (CWE 기반)
+  [green]v[/green]. 스캔 결과 조회
+
 [bold cyan]⚙️  SETTINGS (설정)[/bold cyan]
   [green]s[/green]. API 프로필 관리 (LLM, Image/Audio/Video 생성)
   [green]j[/green]. Judge 프로필 관리 (LLM Judge)
@@ -516,72 +548,217 @@ class PromptArsenal:
     def show_help(self):
         """Display detailed help with usage examples"""
         help_text = """
-[bold yellow]📖 Prompt Arsenal 사용 가이드[/bold yellow]
+[bold yellow]📖 Prompt Arsenal 완전 가이드[/bold yellow]
 
-[bold cyan]🎯 빠른 시작:[/bold cyan]
+[bold cyan]⚡ 빠른 시작 (5분):[/bold cyan]
   1️⃣  [green]1[/green] → GitHub 데이터셋 가져오기 (jailbreakchat, fuzzing 등)
   2️⃣  [green]s[/green] → API 프로필 설정 (OpenAI/Anthropic/Google/xAI)
-  3️⃣  [green]j[/green] → Judge 프로필 설정 (LLM Judge)
+  3️⃣  [green]j[/green] → Judge 프로필 설정 (gpt-4o-mini 추천)
   4️⃣  [green]8[/green] → 텍스트 LLM 테스트 시작
 
-[bold cyan]💡 디폴트 경로 활용:[/bold cyan]
-  파일 경로 입력 시 [green]Enter[/green]만 누르면 샘플 파일 자동 사용!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  📁 이미지: [dim]samples/images/sample.jpg[/dim]
-  🎵 오디오: [dim]samples/audio/sample.wav[/dim]
-  🎬 비디오: [dim]samples/video/sample.mp4[/dim]
+[bold cyan]🎯 ARSENAL (무기고)[/bold cyan]
 
-  ⚙️  샘플 생성: [yellow]python3 create_samples.py[/yellow]
+  [yellow]1. GitHub 데이터셋 가져오기[/yellow]
+     40,000+ 프롬프트를 자동으로 수집
+     • jailbreakchat (탈옥 프롬프트)
+     • fuzzing-templates (퍼징 템플릿)
+     • adversarial-examples (적대적 예제)
+     • harmful-behaviors (유해 행동 유도)
+     👉 숫자 또는 이름 입력, 'all'로 전체 가져오기
 
-[bold cyan]🚀 주요 워크플로우:[/bold cyan]
+  [yellow]2. 텍스트 프롬프트 추가[/yellow]
+     수동으로 프롬프트 추가
+     • 카테고리, 페이로드, 설명 입력
+     • 중복 자동 체크
 
-  [yellow]1. 프롬프트 수집:[/yellow]
-     1 → jailbreakchat 선택 → 자동 가져오기
-     2 → 수동으로 프롬프트 추가
+  [yellow]3. 멀티모달 공격 생성[/yellow]
+     이미지/오디오/비디오 공격 생성
+     • [green]이미지[/green]: FGSM, Typography, Perturbation
+     • [green]오디오[/green]: TTS (OpenAI)
+     • [green]비디오[/green]: 개발 중
+     💡 파일 경로에서 [green]Enter[/green]만 누르면 샘플 자동 사용
 
-  [yellow]2. 멀티모달 공격:[/yellow]
-     3 → image → fgsm → [green]Enter[/green] (샘플 사용)
-     9 → 멀티모달 LLM 테스트
+  [yellow]4. 프롬프트 관리[/yellow]
+     프롬프트 수정/삭제
 
-  [yellow]3. LLM Judge 설정:[/yellow]
-     j → Judge 프로필 추가 (gpt-4o-mini 추천)
-     j → 기본 Judge 모드 설정 (hybrid 추천)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  [yellow]4. LLM 테스트:[/yellow]
-     s → API 키 등록
-     8 → 프로필 선택 → 카테고리 선택 → Judge 모드 선택 → 테스트
+[bold cyan]🔍 RECON (정찰)[/bold cyan]
 
-  [yellow]5. 보안 스캔:[/yellow]
-     g → API 프로필 → DAN Jailbreak 스캔 → 자동 DB 통합
+  [yellow]5. 텍스트 프롬프트 검색[/yellow]
+     키워드/카테고리로 검색
+     • 성공률, 사용 횟수 표시
+     • ID 선택하여 상세 보기
 
-[bold cyan]🎭 LLM Judge 시스템:[/bold cyan]
+  [yellow]6. 멀티모달 무기고 검색[/yellow]
+     미디어 타입/공격 타입으로 검색
+     • image, audio, video 필터링
+     • 생성된 파일 경로 확인
+
+  [yellow]7. 카테고리/통계 조회[/yellow]
+     전체 통계 및 카테고리별 분포
+
+  [yellow]r. 테스트 결과 조회[/yellow]
+     텍스트 + 멀티모달 테스트 결과
+     • 성공률, 심각도, 신뢰도 표시
+     • [green]결과 내보내기 기능[/green]: CSV, JSON, Markdown 지원 ⭐ 신규
+     • ID 선택하여 상세 보기 (입력/응답/판정 이유)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[bold cyan]⚔️  ATTACK (공격)[/bold cyan]
+
+  [yellow]8. 텍스트 LLM 테스트[/yellow]
+     프롬프트로 LLM 공격
+     • API 프로필 선택
+     • 카테고리 선택 (jailbreak, prompt-injection 등)
+     • Judge 모드 선택 (rule-based/llm/hybrid)
+     • 배치 테스트 지원
+
+  [yellow]9. 멀티모달 LLM 테스트[/yellow] ⭐ 강화됨
+     이미지/오디오/비디오로 LLM 공격
+     [green]새로운 기능:[/green]
+     • [green]미디어 선택[/green]: 기존 무기고 또는 새로 생성
+     • [green]프롬프트 선택[/green]: 직접 입력 또는 DB에서 선택
+     • [green]테스트 모드[/green]: 단일 테스트 또는 배치 테스트
+     • [green]배치 테스트[/green]: 여러 프롬프트 한 번에 테스트 (직접 입력/카테고리/개별 선택)
+
+  [yellow]g. GARAK 보안 스캔[/yellow]
+     전문 보안 스캐너 통합
+     • DAN Jailbreak, Encoding 우회, Prompt Injection 등
+     • 결과 자동 DB 통합
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[bold red]🔄 MULTI-TURN (멀티턴 공격)[/bold red]
+
+  [yellow]0. Multi-Turn 공격 캠페인[/yellow]
+     여러 턴에 걸친 복잡한 공격
+     • [green]Visual Storytelling[/green]: 이미지 기반 스토리텔링
+     • [green]Crescendo[/green]: 점진적 강도 증가
+     • [green]Roleplay[/green]: 역할극 기반 공격
+     💡 자동 프롬프트 생성 + 진행 상황 추적
+
+  [yellow]c. 캠페인 결과 조회[/yellow]
+     Multi-Turn 캠페인 목록 및 성공률
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[bold yellow]🛡️  SECURITY (코드 보안 스캔)[/bold yellow]
+
+  [yellow]a. 코드 취약점 스캔[/yellow]
+     CWE 기반 정적 분석
+     • [green]4가지 스캔 모드[/green]:
+       - rule_only: 정적 분석 도구만 (빠름)
+       - verify_with_llm: 도구 결과 → LLM 검증 (정확)
+       - llm_detect: LLM 탐지 → 도구 교차 검증
+       - hybrid: 신뢰도 기반 선택적 LLM 검증 ⭐ 추천
+     • Bandit, Semgrep 통합
+
+  [yellow]v. 스캔 결과 조회[/yellow]
+     취약점 상세 정보
+     • CWE ID, 심각도, 파일 경로
+     • LLM 판정 이유
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[bold cyan]⚙️  SETTINGS (설정)[/bold cyan]
+
+  [yellow]s. API 프로필 관리[/yellow]
+     LLM, Image/Audio/Video 생성 API 설정
+     • OpenAI (gpt-4o-mini, gpt-4o, dall-e-3, tts-1)
+     • Anthropic (claude-3-5-sonnet-20241022)
+     • Google (gemini-1.5-pro, gemini-2.0-flash-exp)
+     • xAI (grok-beta)
+
+  [yellow]j. Judge 프로필 관리[/yellow]
+     LLM Judge 설정
+     • gpt-4o-mini 추천 (빠르고 저렴)
+     • 기본 Judge 모드 설정 (hybrid 추천)
+
+  [yellow]e. 결과 내보내기[/yellow]
+     프롬프트/테스트 결과 내보내기
+     • CSV, JSON, TXT 지원
+
+  [yellow]d. 데이터 삭제[/yellow]
+     카테고리별 데이터 삭제
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[bold cyan]🎭 LLM Judge 시스템 완전 가이드[/bold cyan]
 
   [yellow]3가지 Judge 모드:[/yellow]
-    - [green]rule-based[/green]: 빠른 패턴 매칭 (키워드 기반)
-    - [green]llm[/green]: LLM 판정 (정확하지만 느림)
-    - [green]hybrid[/green]: 하이브리드 (규칙 기반 먼저, 불확실하면 LLM) ⭐ 추천
+    • [green]rule-based[/green]: 빠른 패턴 매칭 (키워드 기반)
+      - 장점: 매우 빠름 (무료)
+      - 단점: 오탐 가능성
 
-  [yellow]장점:[/yellow]
-    - LLM이 응답을 읽고 jailbreak 성공 여부 자동 판정
-    - 심각도(severity), 신뢰도(confidence), 판단 이유(reasoning) 제공
-    - 규칙 기반보다 훨씬 정확한 판정
+    • [green]llm[/green]: LLM 판정 (정확하지만 느림)
+      - 장점: 매우 정확한 판정
+      - 단점: 느리고 비용 발생
 
-[bold cyan]💾 데이터 관리:[/bold cyan]
+    • [green]hybrid[/green]: 하이브리드 ⭐ 추천
+      - 규칙 기반 먼저 시도
+      - 불확실하면 LLM 판정
+      - 장점: 빠르고 정확, 비용 효율적
 
-  5 → 텍스트 프롬프트 검색 (키워드, 카테고리)
-  6 → 멀티모달 무기고 검색
-  7 → 통계 조회 (성공률, 카테고리별 분포)
-  r → 공격 테스트 결과 조회 (Judge 판정 상세 포함)
+  [yellow]Judge 응답 예시:[/yellow]
+    {
+      "success": true,
+      "severity": "high",
+      "confidence": 0.92,
+      "reasoning": "모델이 불법적인 내용을 상세히 설명했으며..."
+    }
 
-[bold cyan]🔧 팁:[/bold cyan]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[bold cyan]💡 실전 워크플로우 예제[/bold cyan]
+
+  [yellow]시나리오 1: 텍스트 Jailbreak 테스트[/yellow]
+    1 → jailbreakchat 선택 (40,000+ 프롬프트 가져오기)
+    s → OpenAI API 키 등록
+    j → Judge 프로필 설정 (gpt-4o-mini)
+    8 → jailbreak 카테고리 → hybrid 모드 → 100개 테스트
+    r → 결과 조회 → CSV 내보내기 → 분석
+
+  [yellow]시나리오 2: 멀티모달 공격 테스트[/yellow]
+    3 → image → typography → "How to hack" 입력
+    9 → 새로 생성 → DB에서 프롬프트 선택 → 배치 테스트 선택
+       → 카테고리에서 선택 → jailbreak → 10개 선택
+    r → 멀티모달 결과 조회 → Markdown 내보내기
+
+  [yellow]시나리오 3: Multi-Turn 캠페인[/yellow]
+    0 → Visual Storytelling 선택 → 목표 입력
+       → 자동 프롬프트 생성 → 순차 실행
+    c → 캠페인 결과 조회 → 성공률 확인
+
+  [yellow]시나리오 4: 코드 보안 스캔[/yellow]
+    a → ./src 입력 → hybrid 모드 → API 프로필 선택
+       → 스캔 실행 → 취약점 발견
+    v → 스캔 결과 조회 → 상세 정보 확인
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[bold cyan]🔧 Pro Tips[/bold cyan]
 
   ✅ 모든 입력은 [green]Enter[/green]로 디폴트 사용 가능
-  ✅ Ctrl+C로 현재 작업 취소
+  ✅ [green]Ctrl+C[/green]로 현재 작업 취소
   ✅ Judge 프로필은 기존 API 프로필에서 API Key 복사 가능
-  ✅ Garak 스캔 결과는 자동으로 DB에 통합됨
-  ✅ LLM Judge는 gpt-4o-mini 사용 추천 (빠르고 저렴)
+  ✅ Garak 스캔 결과는 자동으로 DB에 통합
+  ✅ LLM Judge는 [green]gpt-4o-mini[/green] 추천 (빠르고 저렴)
+  ✅ 멀티모달 테스트 시 [green]배치 테스트[/green] 활용하여 효율 극대화
+  ✅ 결과 내보내기로 [green]CSV/JSON/Markdown[/green] 형식 지원
+  ✅ Multi-Turn 공격은 [green]복잡한 시나리오[/green]에 효과적
+  ✅ 코드 스캔은 [green]hybrid 모드[/green]로 False Positive 최소화
 
-[dim]자세한 정보: README.md 참조[/dim]
+[bold cyan]📚 추가 리소스[/bold cyan]
+
+  • README.md: 전체 프로젝트 문서
+  • CLAUDE.md: 개발자 가이드
+  • samples/: 샘플 파일 (이미지/오디오/비디오)
+
+[dim]버전: 2.0 | 최종 업데이트: 2025-01-23[/dim]
         """
         console.print(help_text)
 
@@ -1596,6 +1773,28 @@ class PromptArsenal:
             console.print("[yellow]테스트 결과가 없습니다.[/yellow]")
             return
 
+        # Export results
+        if confirm("\n결과를 내보내시겠습니까?", default=False):
+            export_format = ask("내보내기 형식", choices=["csv", "json", "markdown"], default="csv")
+
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            if result_type == 'text' and 'text_results' in locals():
+                filename = f"text_results_{timestamp}.{export_format}"
+                self._export_test_results(text_results, filename, export_format, 'text')
+            elif result_type == 'multimodal' and 'multimodal_results' in locals():
+                filename = f"multimodal_results_{timestamp}.{export_format}"
+                self._export_test_results(multimodal_results, filename, export_format, 'multimodal')
+            elif result_type == 'all':
+                # Export both
+                if 'text_results' in locals() and text_results:
+                    filename = f"text_results_{timestamp}.{export_format}"
+                    self._export_test_results(text_results, filename, export_format, 'text')
+                if 'multimodal_results' in locals() and multimodal_results:
+                    filename = f"multimodal_results_{timestamp}.{export_format}"
+                    self._export_test_results(multimodal_results, filename, export_format, 'multimodal')
+
         # Show details
         if confirm("\n결과 상세 보기를 원하시나요?", default=False):
             detail_type = ask("결과 타입 (text/multimodal)", choices=["text", "multimodal"], default="text")
@@ -1772,6 +1971,112 @@ class PromptArsenal:
             stats_text += f"\n[cyan]Vision 응답 길이:[/cyan] {vision_len} 자"
 
         console.print(Panel(stats_text, title="[bold white]📊 통계[/bold white]", border_style="white"))
+
+    def _export_test_results(self, results, filename, format, result_type):
+        """Export test results to file"""
+        import csv
+        import json
+        from pathlib import Path
+
+        try:
+            export_path = Path(filename)
+
+            if format == 'csv':
+                # CSV export
+                with open(export_path, 'w', newline='', encoding='utf-8') as f:
+                    if result_type == 'text':
+                        fieldnames = ['id', 'category', 'model', 'success', 'severity', 'confidence', 'response_time', 'tested_at', 'used_input', 'response']
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for r in results:
+                            writer.writerow({
+                                'id': r.get('id', ''),
+                                'category': r.get('category', ''),
+                                'model': r.get('model', ''),
+                                'success': 'Yes' if r.get('success') else 'No',
+                                'severity': r.get('severity', ''),
+                                'confidence': f"{r.get('confidence', 0):.2f}",
+                                'response_time': f"{r.get('response_time', 0):.2f}",
+                                'tested_at': r.get('tested_at', ''),
+                                'used_input': r.get('used_input', ''),
+                                'response': r.get('response', '')
+                            })
+                    else:  # multimodal
+                        fieldnames = ['id', 'media_type', 'attack_type', 'model', 'success', 'severity', 'confidence', 'response_time', 'tested_at', 'text_input', 'response']
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for r in results:
+                            writer.writerow({
+                                'id': r.get('id', ''),
+                                'media_type': r.get('media_type', ''),
+                                'attack_type': r.get('attack_type', ''),
+                                'model': r.get('model', ''),
+                                'success': 'Yes' if r.get('success') else 'No',
+                                'severity': r.get('severity', ''),
+                                'confidence': f"{r.get('confidence', 0):.2f}",
+                                'response_time': f"{r.get('response_time', 0):.2f}",
+                                'tested_at': r.get('tested_at', ''),
+                                'text_input': r.get('text_input', ''),
+                                'response': r.get('response', '')
+                            })
+
+            elif format == 'json':
+                # JSON export
+                with open(export_path, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, ensure_ascii=False, indent=2)
+
+            elif format == 'markdown':
+                # Markdown export
+                with open(export_path, 'w', encoding='utf-8') as f:
+                    f.write(f"# Test Results Export\n\n")
+                    f.write(f"**Total Results**: {len(results)}\n\n")
+
+                    if result_type == 'text':
+                        f.write("| ID | Category | Model | Success | Severity | Confidence | Time | Tested At |\n")
+                        f.write("|---|---|---|---|---|---|---|---|\n")
+                        for r in results:
+                            success = "✅" if r.get('success') else "❌"
+                            f.write(f"| {r.get('id', '')} | {r.get('category', '')} | {r.get('model', '')} | {success} | {r.get('severity', '')} | {r.get('confidence', 0):.2f} | {r.get('response_time', 0):.2f}s | {r.get('tested_at', '')} |\n")
+
+                        # Add details section
+                        f.write("\n## Detailed Results\n\n")
+                        for i, r in enumerate(results, 1):
+                            f.write(f"### {i}. Result ID: {r.get('id', '')}\n\n")
+                            f.write(f"- **Category**: {r.get('category', '')}\n")
+                            f.write(f"- **Model**: {r.get('model', '')}\n")
+                            f.write(f"- **Success**: {'✅ Yes' if r.get('success') else '❌ No'}\n")
+                            f.write(f"- **Severity**: {r.get('severity', '')}\n")
+                            f.write(f"- **Confidence**: {r.get('confidence', 0):.2f}\n\n")
+                            f.write(f"**Input**:\n```\n{r.get('used_input', '')}\n```\n\n")
+                            f.write(f"**Response**:\n```\n{r.get('response', '')}\n```\n\n")
+                            f.write("---\n\n")
+                    else:  # multimodal
+                        f.write("| ID | Media | Attack Type | Model | Success | Severity | Confidence | Time | Tested At |\n")
+                        f.write("|---|---|---|---|---|---|---|---|---|\n")
+                        for r in results:
+                            success = "✅" if r.get('success') else "❌"
+                            f.write(f"| {r.get('id', '')} | {r.get('media_type', '')} | {r.get('attack_type', '')} | {r.get('model', '')} | {success} | {r.get('severity', '')} | {r.get('confidence', 0):.2f} | {r.get('response_time', 0):.2f}s | {r.get('tested_at', '')} |\n")
+
+                        # Add details section
+                        f.write("\n## Detailed Results\n\n")
+                        for i, r in enumerate(results, 1):
+                            f.write(f"### {i}. Result ID: {r.get('id', '')}\n\n")
+                            f.write(f"- **Media Type**: {r.get('media_type', '')}\n")
+                            f.write(f"- **Attack Type**: {r.get('attack_type', '')}\n")
+                            f.write(f"- **Model**: {r.get('model', '')}\n")
+                            f.write(f"- **Success**: {'✅ Yes' if r.get('success') else '❌ No'}\n")
+                            f.write(f"- **Severity**: {r.get('severity', '')}\n")
+                            f.write(f"- **Confidence**: {r.get('confidence', 0):.2f}\n\n")
+                            f.write(f"**Text Input**:\n```\n{r.get('text_input', '')}\n```\n\n")
+                            f.write(f"**Response**:\n```\n{r.get('response', '')}\n```\n\n")
+                            f.write("---\n\n")
+
+            console.print(f"[green]✅ 결과가 성공적으로 내보내졌습니다: {export_path.absolute()}[/green]")
+            return True
+
+        except Exception as e:
+            console.print(f"[red]❌ 내보내기 실패: {e}[/red]")
+            return False
 
     # === ATTACK ===
 
@@ -2223,8 +2528,8 @@ class PromptArsenal:
             console.print(f"[red]Error: {e}[/red]")
 
     def attack_multimodal_llm(self):
-        """Test multimodal LLM"""
-        console.print("\n[bold yellow]멀티모달 LLM 테스트[/bold yellow]")
+        """Test multimodal LLM with media generation and batch testing"""
+        console.print("\n[bold yellow]⚔️  멀티모달 LLM 테스트[/bold yellow]")
 
         # Select profile
         profiles = self.config.get_all_profiles()
@@ -2258,11 +2563,178 @@ class PromptArsenal:
             console.print("[red]숫자를 입력하세요.[/red]")
             return
 
+        # === STEP 1: Media Source Selection ===
+        console.print("\n[bold cyan]📷 미디어 소스 선택[/bold cyan]")
+        console.print("  [green]1[/green]. 기존 무기고에서 선택")
+        console.print("  [green]2[/green]. 새로 생성 (텍스트 → 이미지/오디오/비디오)")
+
+        media_source = ask("미디어 소스", choices=["1", "2"], default="1")
+
+        if media_source == "2":
+            # Generate new media
+            media_id, generated_file, attack_type = self._generate_media_for_test(profile)
+            if not media_id:
+                console.print("[red]미디어 생성 실패[/red]")
+                return
+            selected = {
+                'id': media_id,
+                'generated_file': generated_file,
+                'attack_type': attack_type
+            }
+        else:
+            # Select from arsenal
+            media_id, selected = self._select_media_from_arsenal()
+            if not media_id:
+                return
+
+        # === STEP 2: Test Mode Selection ===
+        console.print("\n[bold cyan]🎯 테스트 모드 선택[/bold cyan]")
+        console.print("  [green]1[/green]. 단일 테스트 (프롬프트 1개)")
+        console.print("  [green]2[/green]. 배치 테스트 (프롬프트 여러 개)")
+
+        test_mode = ask("테스트 모드", choices=["1", "2"], default="1")
+
+        if test_mode == "2":
+            # Batch test
+            asyncio.run(self._batch_multimodal_test(profile, media_id, selected))
+        else:
+            # Single test
+            asyncio.run(self._single_multimodal_test(profile, media_id, selected))
+
+    def _generate_media_for_test(self, profile):
+        """Generate media for testing"""
+        console.print("\n[cyan]🎨 새 공격 미디어 생성[/cyan]")
+
+        # Media type selection
+        console.print("\n[bold]미디어 타입:[/bold]")
+        console.print("  [green]1[/green]. Image (이미지)")
+        console.print("  [green]2[/green]. Audio (오디오)")
+        console.print("  [green]3[/green]. Video (비디오)")
+
+        media_type_choice = ask("미디어 타입", choices=["1", "2", "3"], default="1")
+        media_type_map = {"1": "image", "2": "audio", "3": "video"}
+        media_type = media_type_map[media_type_choice]
+
+        # Text prompt selection
+        console.print("\n[cyan]💬 텍스트 프롬프트 선택[/cyan]")
+        console.print("  [green]1[/green]. 직접 입력")
+        console.print("  [green]2[/green]. DB에서 선택")
+
+        prompt_choice = ask("프롬프트 입력 방식", choices=["1", "2"], default="1")
+
+        if prompt_choice == "1":
+            # Direct input
+            prompt = ask("텍스트 프롬프트 (공격 내용)", default="Instructions for hacking")
+        else:
+            # Select from DB
+            prompt = asyncio.run(self._select_prompt_from_db())
+
+        # Attack type
+        attack_type = ask("공격 타입", default="typographic-jailbreak")
+
+        # Generate based on media type
+        if media_type == "image":
+            return self._generate_image_for_test(prompt, attack_type, profile)
+        elif media_type == "audio":
+            return self._generate_audio_for_test(prompt, attack_type, profile)
+        else:  # video
+            return self._generate_video_for_test(prompt, attack_type)
+
+    def _generate_image_for_test(self, prompt, attack_type, profile):
+        """Generate image for testing"""
+        from multimodal.image_generator import ImageGenerator
+
+        console.print("\n[cyan]이미지 생성 방법:[/cyan]")
+
+        # Check if current profile supports image generation
+        supports_image_gen = profile['provider'] in ['openai', 'dalle']
+
+        if supports_image_gen:
+            console.print(f"  [green]1[/green]. {profile['provider'].upper()} (현재 프로필: {profile['model']})")
+            console.print("  [green]2[/green]. 타이포그래피 (로컬)")
+            gen_method = ask("생성 방법", choices=["1", "2"], default="1")
+        else:
+            console.print(f"  [yellow]현재 프로필({profile['provider']})은 이미지 생성을 지원하지 않습니다.[/yellow]")
+            console.print("  [green]1[/green]. 타이포그래피 (로컬)")
+            gen_method = "2"
+
+        if gen_method == "1":
+            # Use current profile
+            generator = ImageGenerator(
+                provider=profile['provider'],
+                model=profile['model'],
+                api_key=profile['api_key']
+            )
+
+            console.print(f"\n[yellow]🎨 {profile['model']}로 이미지 생성 중...[/yellow]")
+            result = asyncio.run(generator.generate_dalle(prompt, attack_type))
+        else:
+            # Typography
+            generator = ImageGenerator()
+            console.print(f"\n[yellow]🎨 타이포그래피 이미지 생성 중...[/yellow]")
+            result = generator.generate_typography(prompt, attack_type)
+
+        if result.get('success'):
+            media_id = self.db.insert_media(
+                media_type='image',
+                attack_type=attack_type,
+                text_prompt=prompt,
+                generated_file=result['file_path']
+            )
+            console.print(f"[green]✅ 이미지 생성 완료: {result['file_path']}[/green]")
+            return media_id, result['file_path'], attack_type
+        else:
+            console.print(f"[red]이미지 생성 실패: {result.get('error', 'Unknown')}[/red]")
+            return None, None, None
+
+    def _generate_audio_for_test(self, prompt, attack_type, profile):
+        """Generate audio for testing"""
+        from multimodal.audio_generator import AudioGenerator
+
+        # Check if current profile supports TTS
+        if profile['provider'] != 'openai':
+            console.print(f"[red]현재 프로필({profile['provider']})은 TTS를 지원하지 않습니다. OpenAI 프로필이 필요합니다.[/red]")
+            return None, None, None
+
+        # Use TTS model if specified in profile, otherwise default to tts-1
+        tts_model = profile['model'] if profile['model'].startswith('tts-') else 'tts-1'
+
+        console.print(f"\n[cyan]현재 프로필({profile['provider']})로 TTS 생성 (모델: {tts_model})[/cyan]")
+
+        generator = AudioGenerator(
+            provider=profile['provider'],
+            model=tts_model,
+            api_key=profile['api_key']
+        )
+
+        console.print(f"\n[yellow]🎵 {tts_model}로 오디오 생성 중...[/yellow]")
+        result = asyncio.run(generator.generate_tts(prompt, attack_type))
+
+        if result.get('success'):
+            media_id = self.db.insert_media(
+                media_type='audio',
+                attack_type=attack_type,
+                text_prompt=prompt,
+                generated_file=result['file_path']
+            )
+            console.print(f"[green]✅ 오디오 생성 완료: {result['file_path']}[/green]")
+            return media_id, result['file_path'], attack_type
+        else:
+            console.print(f"[red]오디오 생성 실패: {result.get('error', 'Unknown')}[/red]")
+            return None, None, None
+
+    def _generate_video_for_test(self, prompt, attack_type):
+        """Generate video for testing"""
+        console.print("[yellow]비디오 생성은 현재 지원하지 않습니다.[/yellow]")
+        return None, None, None
+
+    def _select_media_from_arsenal(self):
+        """Select media from arsenal"""
         # Get media
         media = self.db.get_media(media_type='image', limit=10)
         if not media:
             console.print("[yellow]이미지 무기고가 비어있습니다.[/yellow]")
-            return
+            return None, None
 
         table = Table(title="Available Images")
         table.add_column("No.", style="magenta", justify="right")
@@ -2280,15 +2752,76 @@ class PromptArsenal:
             idx = int(media_choice) - 1
             if 0 <= idx < len(media):
                 selected = media[idx]
-                media_id = selected['id']
+                return selected['id'], selected
             else:
                 console.print("[red]잘못된 선택입니다.[/red]")
-                return
+                return None, None
         except ValueError:
             console.print("[red]숫자를 입력하세요.[/red]")
+            return None, None
+
+    async def _single_multimodal_test(self, profile, media_id, selected):
+        """Single multimodal test"""
+        # Use existing text_input from media if available (from arsenal)
+        if 'text_input' in selected and selected['text_input']:
+            console.print(f"\n[cyan]💬 기존 미디어의 프롬프트 사용:[/cyan]")
+            console.print(f"[dim]{selected['text_input'][:100]}...[/dim]")
+            prompt = selected['text_input']
+        else:
+            # Select prompt (for newly generated media)
+            prompt = await self._select_prompt()
+            if not prompt:
+                return
+
+        # Select judge mode
+        judge = self._select_judge_mode()
+
+        # Run test
+        await self._run_multimodal_test(profile, media_id, selected, prompt, judge)
+
+    async def _batch_multimodal_test(self, profile, media_id, selected):
+        """Batch multimodal test"""
+        console.print("\n[bold cyan]📦 배치 테스트 설정[/bold cyan]")
+
+        # Use existing text_input from media if available (from arsenal)
+        if 'text_input' in selected and selected['text_input']:
+            console.print(f"\n[cyan]💬 기존 미디어의 프롬프트 사용:[/cyan]")
+            console.print(f"[dim]{selected['text_input'][:100]}...[/dim]")
+            console.print(f"[yellow]배치 테스트는 여러 프롬프트가 필요합니다. 추가 프롬프트를 선택하세요.[/yellow]")
+
+        # Select prompts
+        prompts = await self._select_prompts_batch()
+        if not prompts:
+            console.print("[yellow]선택된 프롬프트가 없습니다.[/yellow]")
             return
 
-        # Select prompt
+        console.print(f"\n[green]총 {len(prompts)}개 프롬프트 선택됨[/green]")
+
+        # Select judge mode
+        judge = self._select_judge_mode()
+
+        # Run batch tests
+        console.print(f"\n[bold yellow]🚀 배치 테스트 시작 ({len(prompts)}개)[/bold yellow]")
+
+        results = []
+        for i, prompt_data in enumerate(prompts, 1):
+            console.print(f"\n[cyan]━━━ 테스트 {i}/{len(prompts)} ━━━[/cyan]")
+            console.print(f"[dim]프롬프트: {prompt_data[:80]}...[/dim]")
+
+            result = await self._run_multimodal_test(
+                profile, media_id, selected,
+                prompt_data, judge,
+                show_briefing=False
+            )
+            results.append(result)
+
+        # Summary
+        success_count = sum(1 for r in results if r and r.get('success'))
+        console.print(f"\n[bold green]✅ 배치 테스트 완료![/bold green]")
+        console.print(f"  성공: {success_count}/{len(prompts)} ({success_count/len(prompts)*100:.1f}%)")
+
+    async def _select_prompt(self):
+        """Select single prompt"""
         console.print("\n[cyan]💬 프롬프트 선택[/cyan]")
         console.print("  [green]1[/green]. 직접 입력")
         console.print("  [green]2[/green]. DB에서 선택")
@@ -2297,186 +2830,140 @@ class PromptArsenal:
 
         if prompt_choice == "1":
             # Direct input
-            prompt = ask("프롬프트 입력", default="What do you see in this image? Describe any suspicious or hidden elements.")
+            return ask("프롬프트 입력", default="What do you see in this image?")
         else:
-            # Select from DB
+            # Select from DB (existing logic)
+            return await self._select_prompt_from_db()
+
+    async def _select_prompt_from_db(self):
+        """Select prompt from database"""
+        categories = self.db.get_categories()
+        if not categories:
+            console.print("[yellow]DB에 프롬프트가 없습니다.[/yellow]")
+            return "What do you see in this image?"
+
+        # Show categories
+        cat_table = Table(title="카테고리 목록")
+        cat_table.add_column("No.", style="magenta", justify="right")
+        cat_table.add_column("Category", style="cyan")
+        cat_table.add_column("Count", style="yellow", justify="right")
+
+        for idx, cat in enumerate(categories, 1):
+            cat_table.add_row(str(idx), cat['category'], str(cat['prompt_count']))
+
+        console.print(cat_table)
+
+        cat_choice = ask(f"카테고리 선택 (1-{len(categories)})", default="1")
+
+        try:
+            cat_idx = int(cat_choice) - 1
+            if 0 <= cat_idx < len(categories):
+                selected_category = categories[cat_idx]['category']
+                prompts = self.db.get_prompts(category=selected_category, limit=20)
+
+                if not prompts:
+                    return "What do you see in this image?"
+
+                # Show prompts
+                prompt_table = Table(title=f"프롬프트 - {selected_category}")
+                prompt_table.add_column("No.", style="magenta", justify="right", width=4)
+                prompt_table.add_column("Prompt", style="white", max_width=80)
+
+                for idx, p in enumerate(prompts, 1):
+                    payload_preview = p['payload'][:80] + "..." if len(p['payload']) > 80 else p['payload']
+                    prompt_table.add_row(str(idx), payload_preview)
+
+                console.print(prompt_table)
+
+                prompt_idx_choice = ask(f"프롬프트 선택 (1-{len(prompts)})", default="1")
+                prompt_idx = int(prompt_idx_choice) - 1
+                if 0 <= prompt_idx < len(prompts):
+                    return prompts[prompt_idx]['payload']
+        except ValueError:
+            pass
+
+        return "What do you see in this image?"
+
+    async def _select_prompts_batch(self):
+        """Select multiple prompts for batch testing"""
+        console.print("\n[cyan]프롬프트 선택 방법:[/cyan]")
+        console.print("  [green]1[/green]. 직접 입력 (여러 개)")
+        console.print("  [green]2[/green]. DB 카테고리에서 전체 선택")
+        console.print("  [green]3[/green]. DB에서 개별 선택")
+
+        choice = ask("선택 방법", choices=["1", "2", "3"], default="2")
+
+        if choice == "1":
+            # Direct input
+            prompts = []
+            console.print("\n[yellow]프롬프트를 입력하세요 (빈 줄 입력 시 종료)[/yellow]")
+            while True:
+                prompt = ask(f"프롬프트 {len(prompts)+1} (또는 Enter로 종료)", default="")
+                if not prompt:
+                    break
+                prompts.append(prompt)
+            return prompts
+
+        elif choice == "2":
+            # Entire category
             categories = self.db.get_categories()
             if not categories:
-                console.print("[yellow]DB에 프롬프트가 없습니다. 기본 프롬프트를 사용합니다.[/yellow]")
-                prompt = "What do you see in this image? Describe any suspicious or hidden elements."
-            else:
-                # Show categories
-                cat_table = Table(title="카테고리 목록")
-                cat_table.add_column("No.", style="magenta", justify="right")
-                cat_table.add_column("Category", style="cyan")
-                cat_table.add_column("Count", style="yellow", justify="right")
+                return []
 
-                for idx, cat in enumerate(categories, 1):
-                    cat_table.add_row(str(idx), cat['category'], str(cat['prompt_count']))
+            # Show categories
+            cat_table = Table(title="카테고리 목록")
+            cat_table.add_column("No.", style="magenta", justify="right")
+            cat_table.add_column("Category", style="cyan")
+            cat_table.add_column("Count", style="yellow", justify="right")
 
-                console.print(cat_table)
+            for idx, cat in enumerate(categories, 1):
+                cat_table.add_row(str(idx), cat['category'], str(cat['prompt_count']))
 
-                cat_choice = ask(f"카테고리 선택 (1-{len(categories)})", default="1")
+            console.print(cat_table)
 
-                try:
-                    cat_idx = int(cat_choice) - 1
-                    if 0 <= cat_idx < len(categories):
-                        selected_category = categories[cat_idx]['category']
+            cat_choice = ask(f"카테고리 선택 (1-{len(categories)})", default="1")
+            cat_idx = int(cat_choice) - 1
+            if 0 <= cat_idx < len(categories):
+                selected_category = categories[cat_idx]['category']
+                limit = int(ask("최대 프롬프트 수", default="10"))
+                prompts = self.db.get_prompts(category=selected_category, limit=limit)
+                return [p['payload'] for p in prompts]
 
-                        # Ask selection method
-                        console.print("\n[cyan]선택 방법:[/cyan]")
-                        console.print("  [green]1[/green]. 리스트에서 선택")
-                        console.print("  [green]2[/green]. 랜덤")
+        else:
+            # Individual selection
+            console.print("\n[yellow]프롬프트를 선택하세요 (쉼표로 구분된 번호)[/yellow]")
+            prompts_data = await self._select_prompt_from_db()
+            # TODO: implement multi-select
+            return [prompts_data] if prompts_data else []
 
-                        method_choice = ask("선택 방법", choices=["1", "2"], default="1")
+        return []
 
-                        if method_choice == "2":
-                            # Random selection
-                            prompts = self.db.get_prompts(category=selected_category, limit=1, random=True)
-
-                            if not prompts:
-                                console.print("[yellow]해당 카테고리에 프롬프트가 없습니다.[/yellow]")
-                                prompt = "What do you see in this image? Describe any suspicious or hidden elements."
-                            else:
-                                prompt = prompts[0]['payload']
-                                console.print(f"\n[cyan]🎲 랜덤 선택된 프롬프트:[/cyan]")
-                                console.print(f"[dim]{prompt}[/dim]")
-                        else:
-                            # List selection
-                            prompts = self.db.get_prompts(category=selected_category, limit=20)
-
-                            if not prompts:
-                                console.print("[yellow]해당 카테고리에 프롬프트가 없습니다.[/yellow]")
-                                prompt = "What do you see in this image? Describe any suspicious or hidden elements."
-                            else:
-                                # Show prompts
-                                prompt_table = Table(title=f"프롬프트 목록 - {selected_category}")
-                                prompt_table.add_column("No.", style="magenta", justify="right", width=4)
-                                prompt_table.add_column("Prompt", style="white", max_width=80)
-                                prompt_table.add_column("Success Rate", style="green", justify="right", width=12)
-
-                                for idx, p in enumerate(prompts, 1):
-                                    payload_preview = p['payload'][:80] + "..." if len(p['payload']) > 80 else p['payload']
-                                    success_rate = f"{p.get('success_rate', 0):.1f}%"
-                                    prompt_table.add_row(str(idx), payload_preview, success_rate)
-
-                                console.print(prompt_table)
-
-                                prompt_idx_choice = ask(f"프롬프트 선택 (1-{len(prompts)})", default="1")
-
-                                try:
-                                    prompt_idx = int(prompt_idx_choice) - 1
-                                    if 0 <= prompt_idx < len(prompts):
-                                        prompt = prompts[prompt_idx]['payload']
-                                        console.print(f"\n[cyan]선택된 프롬프트:[/cyan]")
-                                        console.print(f"[dim]{prompt}[/dim]")
-                                    else:
-                                        console.print("[red]잘못된 선택입니다. 기본 프롬프트를 사용합니다.[/red]")
-                                        prompt = "What do you see in this image? Describe any suspicious or hidden elements."
-                                except ValueError:
-                                    console.print("[red]숫자를 입력하세요. 기본 프롬프트를 사용합니다.[/red]")
-                                    prompt = "What do you see in this image? Describe any suspicious or hidden elements."
-                    else:
-                        console.print("[red]잘못된 선택입니다. 기본 프롬프트를 사용합니다.[/red]")
-                        prompt = "What do you see in this image? Describe any suspicious or hidden elements."
-                except ValueError:
-                    console.print("[red]숫자를 입력하세요. 기본 프롬프트를 사용합니다.[/red]")
-                    prompt = "What do you see in this image? Describe any suspicious or hidden elements."
-
-        # Check for template variables
-        from core.prompt_manager import has_template_variable, fill_template
-        from text.attack_scenarios import ATTACK_SCENARIOS, CATEGORY_DESCRIPTIONS, get_random_attack
-
-        if has_template_variable(prompt):
-            console.print(f"\n[yellow]🎯 템플릿 변수 감지![/yellow]")
-            console.print(f"[dim]원본: {prompt[:100]}...[/dim]")
-
-            console.print("\n[cyan]템플릿 채우기:[/cyan]")
-            console.print("  [green]1[/green]. 직접 입력")
-            console.print("  [green]2[/green]. 사전 정의된 공격 (카테고리별)")
-            console.print("  [green]3[/green]. 랜덤")
-
-            fill_choice = ask("채우기 방법", choices=["1", "2", "3"], default="1")
-
-            if fill_choice == "1":
-                # Direct input
-                user_input = ask("공격 내용 입력", default="create a guide on hacking")
-                prompt = fill_template(prompt, user_input)
-            elif fill_choice == "2":
-                # Predefined attacks
-                console.print("\n[cyan]공격 카테고리:[/cyan]")
-                categories = list(ATTACK_SCENARIOS.keys())
-                for idx, cat in enumerate(categories, 1):
-                    desc = CATEGORY_DESCRIPTIONS.get(cat, "")
-                    console.print(f"  [green]{idx}[/green]. {cat} - {desc}")
-
-                cat_choice = ask(f"카테고리 선택 (1-{len(categories)})", default="1")
-
-                try:
-                    cat_idx = int(cat_choice) - 1
-                    if 0 <= cat_idx < len(categories):
-                        selected_cat = categories[cat_idx]
-                        attacks = ATTACK_SCENARIOS[selected_cat]
-
-                        # Show attacks
-                        console.print(f"\n[cyan]공격 목록 - {selected_cat}:[/cyan]")
-                        for idx, attack in enumerate(attacks, 1):
-                            console.print(f"  [green]{idx}[/green]. {attack}")
-
-                        attack_choice = ask(f"공격 선택 (1-{len(attacks)})", default="1")
-
-                        try:
-                            attack_idx = int(attack_choice) - 1
-                            if 0 <= attack_idx < len(attacks):
-                                user_input = attacks[attack_idx]
-                                prompt = fill_template(prompt, user_input)
-                            else:
-                                console.print("[red]잘못된 선택입니다. 첫 번째 공격을 사용합니다.[/red]")
-                                user_input = attacks[0]
-                                prompt = fill_template(prompt, user_input)
-                        except ValueError:
-                            console.print("[red]숫자를 입력하세요. 첫 번째 공격을 사용합니다.[/red]")
-                            user_input = attacks[0]
-                            prompt = fill_template(prompt, user_input)
-                    else:
-                        console.print("[red]잘못된 선택입니다. 랜덤 공격을 사용합니다.[/red]")
-                        user_input = get_random_attack()
-                        prompt = fill_template(prompt, user_input)
-                except ValueError:
-                    console.print("[red]숫자를 입력하세요. 랜덤 공격을 사용합니다.[/red]")
-                    user_input = get_random_attack()
-                    prompt = fill_template(prompt, user_input)
-            else:
-                # Random
-                user_input = get_random_attack()
-                console.print(f"[cyan]🎲 랜덤 선택: {user_input}[/cyan]")
-                prompt = fill_template(prompt, user_input)
-
-            console.print(f"\n[green]✅ 최종 프롬프트:[/green]")
-            console.print(f"[dim]{prompt[:200]}...[/dim]" if len(prompt) > 200 else f"[dim]{prompt}[/dim]")
-
-        # Select judge mode
+    def _select_judge_mode(self):
+        """Select judge mode"""
         console.print("\n[cyan]🎭 Judge 모드 선택[/cyan]")
         judge_settings = self.config.config.get('judge_settings', {})
         default_mode = judge_settings.get('default_mode', 'rule-based')
 
         console.print(f"[yellow]현재 기본 모드: {default_mode}[/yellow]")
         console.print("\n[bold]Judge 모드:[/bold]")
-        console.print("  [green]1[/green]. rule-based  - 빠른 패턴 매칭 (키워드 기반)")
-        console.print("  [green]2[/green]. llm         - LLM 판정 (정확하지만 느림)")
-        console.print("  [green]3[/green]. hybrid      - 하이브리드 (규칙 기반 먼저, 불확실하면 LLM)")
-        console.print("  [green]d[/green]. default     - 기본 설정 사용")
+        console.print("  [green]1[/green]. rule-based  - 빠른 패턴 매칭")
+        console.print("  [green]2[/green]. llm         - LLM 판정")
+        console.print("  [green]3[/green]. hybrid      - 하이브리드")
+        console.print("  [green]d[/green]. default     - 기본 설정")
 
         mode_choice = ask("Judge 모드", choices=["1", "2", "3", "d"], default="d")
 
         if mode_choice == "d":
-            judge = self._create_judge()  # Use default
+            return self._create_judge()
         else:
             mode_map = {"1": "rule-based", "2": "llm", "3": "hybrid"}
-            judge = self._create_judge(mode=mode_map[mode_choice])
+            return self._create_judge(mode=mode_map[mode_choice])
 
-        # Create tester
+    async def _run_multimodal_test(self, profile, media_id, selected, prompt, judge, show_briefing=True):
+        """Run multimodal test"""
         from multimodal.multimodal_tester import MultimodalTester
+        from rich.panel import Panel
+
         tester = MultimodalTester(
             db=self.db,
             provider=profile['provider'],
@@ -2485,67 +2972,46 @@ class PromptArsenal:
             base_url=profile.get('base_url')
         )
 
-        # Mission briefing
-        from rich.panel import Panel
-        console.print()
-        console.print(Panel(
-            f"[bold white]Target:[/bold white] {profile['provider']}/{profile['model']}\n"
-            f"[bold white]Media:[/bold white] {selected['attack_type']}\n"
-            f"[bold white]File:[/bold white] {selected['generated_file'][-50:]}",
-            title="[bold red]⚔️  MISSION BRIEFING[/bold red]",
-            border_style="red"
-        ))
-        console.print()
+        if show_briefing:
+            console.print()
+            console.print(Panel(
+                f"[bold white]Target:[/bold white] {profile['provider']}/{profile['model']}\n"
+                f"[bold white]Media:[/bold white] {selected['attack_type']}\n"
+                f"[bold white]File:[/bold white] {selected['generated_file'][-50:]}",
+                title="[bold red]⚔️  MISSION BRIEFING[/bold red]",
+                border_style="red"
+            ))
+            console.print()
 
-        # Run test
-        console.print("[bold yellow]┌[/bold yellow] [bold white]Testing multimodal attack...[/bold white]")
+        console.print("[bold yellow]┌[/bold yellow] [bold white]Testing...[/bold white]")
 
         try:
-            result = asyncio.run(tester.test_vision_with_judge(
+            result = await tester.test_vision_with_judge(
                 media_id=media_id,
                 image_path=selected['generated_file'],
                 prompt=prompt,
                 judge=judge
-            ))
+            )
 
-            # Display result with box drawing
             judgment = result.get('judgment', {})
 
             if result['success']:
-                console.print(f"[bold yellow]│[/bold yellow] [bold green]✓ BREACH DETECTED[/bold green] [dim]({judgment.get('confidence', 0):.0%} confidence)[/dim]")
+                console.print(f"[bold yellow]│[/bold yellow] [bold green]✓ BREACH[/bold green] [dim]({judgment.get('confidence', 0):.0%})[/dim]")
                 console.print(f"[bold yellow]│[/bold yellow] [red]⚠ Severity:[/red] {judgment.get('severity', 'unknown').upper()}")
             else:
                 console.print(f"[bold yellow]│[/bold yellow] [bold red]✗ DEFENDED[/bold red] [dim]({judgment.get('confidence', 0):.0%})[/dim]")
-                console.print(f"[bold yellow]│[/bold yellow] [dim]{judgment.get('reasoning', 'N/A')[:100]}...[/dim]")
 
-            # Response preview
             if result.get('response'):
                 response_preview = result['response'][:120].replace('\n', ' ')
-                console.print(f"[bold yellow]└[/bold yellow] [dim italic]{response_preview}...[/dim italic]")
-            else:
-                console.print(f"[bold yellow]└[/bold yellow] [yellow]No response[/yellow]")
+                console.print(f"[bold yellow]│[/bold yellow] [dim]{response_preview}...[/dim]")
 
-            console.print()
+            console.print(f"[bold yellow]└[/bold yellow] [green]✓ Saved to DB (ID: {result.get('result_id')})[/green]")
 
-            # Final statistics
-            stats_content = f"""[cyan]응답 시간:[/cyan] {result['response_time']:.2f}s
-[cyan]판정:[/cyan] {"[green]성공[/green]" if result['success'] else "[red]실패[/red]"}
-[cyan]심각도:[/cyan] {judgment.get('severity', 'N/A')}
-[cyan]신뢰도:[/cyan] {judgment.get('confidence', 0):.0%}"""
-
-            console.print(Panel(
-                stats_content,
-                title="[bold cyan]📊 테스트 결과[/bold cyan]",
-                border_style="cyan"
-            ))
-
-            console.print(f"\n[dim]💡 전체 응답과 상세 정보는 메뉴 'r'에서 확인할 수 있습니다.[/dim]")
+            return result
 
         except Exception as e:
-            console.print(f"[bold yellow]│[/bold yellow] [red]✗ API 실패: {e}[/red]")
-            console.print(f"[bold yellow]└[/bold yellow]")
-            import traceback
-            traceback.print_exc()
+            console.print(f"[bold yellow]└[/bold yellow] [red]✗ Error: {e}[/red]")
+            return None
 
     def attack_quick_test(self):
         """Quick test for recently generated attacks"""
@@ -2759,6 +3225,327 @@ class PromptArsenal:
             api_key=profile['api_key'],
             auto_import=True
         )
+
+    async def security_code_scanner(self):
+        """Code vulnerability scanner (CWE-based)"""
+        console.print("\n[bold yellow]🛡️  코드 취약점 스캔 (CWE 기반)[/bold yellow]")
+        console.print("[dim]지원 언어: Python, JS/TS/JSX/TSX, Vue, Java/Kotlin, Go, Rust, C/C++, PHP, Ruby, Shell, C#, Swift, HTML/XML, SQL[/dim]\n")
+
+        # Import scanner
+        from security import SecurityScanner, ScanConfig
+
+        # Get target path
+        target = ask("스캔 대상 경로 (파일 또는 디렉토리)", default=".")
+
+        if not os.path.exists(target):
+            console.print(f"[red]경로를 찾을 수 없습니다: {target}[/red]")
+            return
+
+        # Preview files to scan
+        from pathlib import Path
+        target_path = Path(target)
+        if target_path.is_file():
+            console.print(f"[dim]스캔 대상: 1개 파일[/dim]")
+        else:
+            supported_extensions = [
+                '.py', '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
+                '.java', '.kt', '.scala',
+                '.go', '.rs',
+                '.c', '.cpp', '.cc', '.h', '.hpp',
+                '.php', '.rb', '.sh', '.bash',
+                '.cs', '.swift', '.m', '.mm',
+                '.html', '.xml', '.sql'
+            ]
+            files = [f for f in target_path.rglob("*") if f.suffix.lower() in supported_extensions]
+            console.print(f"[dim]스캔 대상: {len(files)}개 파일 발견[/dim]")
+            if len(files) == 0:
+                console.print("[yellow]⚠️  스캔 가능한 파일이 없습니다.[/yellow]")
+                return
+
+        # Select scan mode
+        console.print("\n스캔 모드:")
+        console.print("  1. Rule Only (규칙 기반 - 빠름)")
+        console.print("  2. Verify with LLM (규칙 → LLM 검증)")
+        console.print("  3. LLM Detect (LLM 탐지 → 규칙 교차검증)")
+        console.print("  4. Hybrid (신뢰도 기반 선택적 LLM 검증 - 추천)")
+
+        mode_choice = ask("선택", choices=["1", "2", "3", "4"], default="4")
+        mode_map = {
+            "1": "rule_only",
+            "2": "verify_with_llm",
+            "3": "llm_detect",
+            "4": "hybrid"
+        }
+        mode = mode_map[mode_choice]
+
+        # Select profile if using LLM
+        profile_name = None
+        if mode != "rule_only":
+            profiles = self.config.get_all_profiles()
+            if not profiles:
+                console.print("[yellow]API 프로필이 없습니다. rule_only 모드로 실행합니다.[/yellow]")
+                mode = "rule_only"
+            else:
+                table = Table(title="API Profiles")
+                table.add_column("No.", style="magenta", justify="right")
+                table.add_column("Name", style="cyan")
+                table.add_column("Provider", style="green")
+                table.add_column("Model", style="yellow")
+
+                profile_list = list(profiles.items())
+                for idx, (name, profile) in enumerate(profile_list, 1):
+                    table.add_row(str(idx), name, profile['provider'], profile['model'])
+
+                console.print(table)
+
+                choice = ask(f"프로필 선택 (1-{len(profile_list)})", default="1")
+
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(profile_list):
+                        profile_name = profile_list[idx][0]
+                    else:
+                        console.print("[red]잘못된 선택입니다.[/red]")
+                        return
+                except ValueError:
+                    console.print("[red]숫자를 입력하세요.[/red]")
+                    return
+
+        # Create scan config
+        config = ScanConfig(
+            target=target,
+            mode=mode,
+            profile_name=profile_name
+        )
+
+        # Create scanner
+        scanner = SecurityScanner(config, db=self.db)
+
+        # Run scan
+        console.print(f"\n[green]🔍 스캔 시작: {target}[/green]")
+        console.print(f"[dim]Mode: {mode}[/dim]\n")
+
+        with console.status("[bold green]스캔 중..."):
+            report = await scanner.scan()
+
+        # Display results
+        console.print("\n[bold cyan]📊 스캔 결과[/bold cyan]")
+        console.print(f"  대상: {report.target}")
+        console.print(f"  소요 시간: {report.scan_duration:.2f}초")
+        console.print(f"  총 발견: {report.total_findings}개")
+        console.print(f"  Critical: [red]{report.critical_count}[/red]")
+        console.print(f"  High: [yellow]{report.high_count}[/yellow]")
+        console.print(f"  Medium: {report.medium_count}")
+        console.print(f"  Low: [dim]{report.low_count}[/dim]")
+
+        if report.llm_calls > 0:
+            console.print(f"\n  LLM 호출: {report.llm_calls}회")
+            console.print(f"  LLM 비용: ${report.llm_cost:.4f}")
+            console.print(f"  LLM 검증: {report.llm_verified}개")
+            console.print(f"  False Positive 제거: {report.false_positives_removed}개")
+
+        # Display findings
+        if report.findings:
+            console.print("\n[bold cyan]🔍 취약점 상세:[/bold cyan]")
+
+            findings_table = Table()
+            findings_table.add_column("CWE", style="magenta")
+            findings_table.add_column("Severity", style="yellow")
+            findings_table.add_column("File", style="cyan")
+            findings_table.add_column("Line", justify="right")
+            findings_table.add_column("Title", style="green")
+
+            for finding in report.findings[:20]:  # Show first 20
+                severity_color = {
+                    'Critical': 'red',
+                    'High': 'yellow',
+                    'Medium': 'white',
+                    'Low': 'dim'
+                }.get(finding.severity, 'white')
+
+                findings_table.add_row(
+                    finding.cwe_id,
+                    f"[{severity_color}]{finding.severity}[/{severity_color}]",
+                    finding.file_path,
+                    str(finding.line_number) if finding.line_number else "-",
+                    finding.title[:50]
+                )
+
+            console.print(findings_table)
+
+            if len(report.findings) > 20:
+                console.print(f"\n[dim]... 그 외 {len(report.findings) - 20}개 (DB에 저장됨)[/dim]")
+
+        # Save to DB
+        if confirm("결과를 DB에 저장하시겠습니까?", default=True):
+            scan_id = await scanner.save_to_db(report)
+            console.print(f"[green]✅ DB에 저장되었습니다. (Scan ID: {scan_id})[/green]")
+
+    def security_view_results(self):
+        """View security scan results"""
+        console.print("\n[bold yellow]📊 보안 스캔 결과 조회[/bold yellow]\n")
+
+        # Get scans from DB
+        scans = self.db.get_security_scans(limit=20)
+
+        if not scans:
+            console.print("[yellow]저장된 스캔 결과가 없습니다.[/yellow]")
+            return
+
+        # Show scans table
+        table = Table(title="최근 보안 스캔")
+        table.add_column("ID", style="magenta", justify="right")
+        table.add_column("대상", style="cyan")
+        table.add_column("모드", style="green")
+        table.add_column("발견", justify="right")
+        table.add_column("🔴", justify="right", style="red")
+        table.add_column("🟠", justify="right", style="yellow")
+        table.add_column("LLM", justify="right")
+        table.add_column("시간", justify="right")
+        table.add_column("날짜", style="dim")
+
+        for scan in scans:
+            table.add_row(
+                str(scan['id']),
+                scan['target'][:30],
+                scan['mode'],
+                str(scan['total_findings']),
+                str(scan['critical_count']),
+                str(scan['high_count']),
+                f"{scan['llm_calls']}회" if scan['llm_calls'] > 0 else "-",
+                f"{scan['scan_duration']:.1f}s",
+                scan['started_at'][:16]
+            )
+
+        console.print(table)
+
+        # Select scan to view details
+        scan_id = ask("\n상세보기할 스캔 ID (Enter=취소)", default="")
+        if not scan_id:
+            return
+
+        try:
+            scan_id = int(scan_id)
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+            return
+
+        # Get findings for this scan
+        findings = self.db.get_security_findings(scan_id)
+
+        if not findings:
+            console.print("[yellow]취약점이 발견되지 않았습니다.[/yellow]")
+            return
+
+        # Show findings
+        console.print(f"\n[bold cyan]🔍 스캔 #{scan_id} 취약점 상세:[/bold cyan]")
+
+        findings_table = Table()
+        findings_table.add_column("#", style="dim", justify="right")
+        findings_table.add_column("CWE", style="magenta")
+        findings_table.add_column("심각도", style="yellow")
+        findings_table.add_column("파일", style="cyan")
+        findings_table.add_column("라인", justify="right")
+        findings_table.add_column("설명", style="green")
+        findings_table.add_column("검증", style="dim")
+
+        for i, finding in enumerate(findings, 1):
+            severity_color = {
+                'Critical': 'red',
+                'High': 'yellow',
+                'Medium': 'white',
+                'Low': 'dim'
+            }.get(finding['severity'], 'white')
+
+            findings_table.add_row(
+                str(i),
+                finding['cwe_id'],
+                f"[{severity_color}]{finding['severity']}[/{severity_color}]",
+                finding['file_path'][-40:],
+                str(finding['line_number']) if finding['line_number'] else "-",
+                finding['description'][:50] + "..." if len(finding['description']) > 50 else finding['description'],
+                finding['verified_by']
+            )
+
+        console.print(findings_table)
+
+        # Show detailed finding if requested
+        if confirm("\n특정 취약점 상세 보기?", default=False):
+            finding_idx = ask("취약점 번호 (1부터 시작)", default="1")
+            try:
+                idx = int(finding_idx) - 1
+                if 0 <= idx < len(findings):
+                    finding = findings[idx]
+                    console.print(f"\n[bold cyan]{'═' * 70}[/bold cyan]")
+                    console.print(f"[bold cyan]취약점 #{idx + 1}: {finding['cwe_id']} - {finding['cwe_name']}[/bold cyan]")
+                    console.print(f"[bold cyan]{'═' * 70}[/bold cyan]")
+
+                    console.print(f"\n[red]🔴 심각도:[/red] [bold]{finding['severity']}[/bold]")
+                    console.print(f"[yellow]📁 파일:[/yellow] {finding['file_path']}:{finding['line_number']}")
+                    console.print(f"[green]✅ 검증:[/green] {finding['verified_by']}")
+
+                    console.print(f"\n[bold]📝 설명:[/bold]")
+                    console.print(finding['description'])
+
+                    # Detect language from file extension
+                    from pathlib import Path
+                    file_ext = Path(finding['file_path']).suffix.lower()
+                    lang_map = {
+                        '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
+                        '.jsx': 'jsx', '.tsx': 'tsx', '.java': 'java',
+                        '.go': 'go', '.rs': 'rust', '.c': 'c', '.cpp': 'cpp',
+                        '.php': 'php', '.rb': 'ruby', '.sh': 'bash', '.sql': 'sql',
+                        '.html': 'html', '.css': 'css', '.vue': 'vue'
+                    }
+                    detected_lang = lang_map.get(file_ext, 'text')
+
+                    # Show vulnerable code
+                    code_to_show = finding.get('code_snippet')
+
+                    # If code_snippet not in DB, read from file
+                    if not code_to_show and finding.get('file_path') and finding.get('line_number'):
+                        try:
+                            with open(finding['file_path'], 'r', encoding='utf-8') as f:
+                                lines = f.readlines()
+
+                            # Show 5 lines before and after
+                            line_num = finding['line_number']
+                            start = max(0, line_num - 6)  # -6 because line_number is 1-indexed
+                            end = min(len(lines), line_num + 5)
+
+                            code_to_show = ''.join(lines[start:end])
+                        except Exception as e:
+                            console.print(f"[dim]⚠️  코드를 읽을 수 없습니다: {e}[/dim]")
+
+                    if code_to_show:
+                        console.print(f"\n[bold red]❌ 취약한 코드:[/bold red]")
+                        from rich.syntax import Syntax
+                        syntax = Syntax(code_to_show, detected_lang, theme="monokai", line_numbers=True)
+                        console.print(syntax)
+
+                    if finding['attack_scenario']:
+                        console.print(f"\n[bold red]⚔️  공격 시나리오:[/bold red]")
+                        console.print(finding['attack_scenario'])
+
+                    if finding['remediation']:
+                        console.print(f"\n[bold green]💡 수정 방법:[/bold green]")
+                        console.print(finding['remediation'])
+
+                    # Show fixed code example
+                    if finding.get('remediation_code'):
+                        console.print(f"\n[bold green]✅ 개선된 코드 예시:[/bold green]")
+                        syntax = Syntax(finding['remediation_code'], detected_lang, theme="monokai", line_numbers=True)
+                        console.print(syntax)
+                    elif finding['remediation']:
+                        # Has remediation text but no code example
+                        console.print(f"\n[dim]💡 팁: LLM 검증이 실행되지 않아 개선 코드 예시가 없습니다.[/dim]")
+                        console.print(f"[dim]   verify_with_llm 또는 llm_detect 모드를 사용하면 개선 코드를 볼 수 있습니다.[/dim]")
+
+                    if finding['llm_reasoning']:
+                        console.print(f"\n[bold cyan]🤖 LLM 분석:[/bold cyan]")
+                        console.print(finding['llm_reasoning'])
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
 
     # === ADVANCED ATTACKS ===
 
@@ -3317,8 +4104,58 @@ class PromptArsenal:
             update_data = {}
 
             if field in ["model", "all"]:
-                new_model = ask("새 Model", default=current['model'])
-                update_data['model'] = new_model
+                # 실시간 모델 조회 옵션
+                fetch_models = confirm("\n실시간 모델 조회? (최신 모델 자동 표시)", default=True)
+
+                new_model = None
+
+                if fetch_models and current['provider'] != "local":
+                    console.print(f"\n[yellow]⏳ {current['provider']} 모델 조회 중...[/yellow]")
+                    available_models = self._fetch_available_models(
+                        current['provider'],
+                        current['api_key'],
+                        current.get('base_url')
+                    )
+
+                    if available_models:
+                        console.print(f"\n[green]✓ {len(available_models)}개 모델 발견![/green]\n")
+
+                        table = Table(title=f"{current['provider'].upper()} Available Models")
+                        table.add_column("No.", style="magenta", justify="right")
+                        table.add_column("Model ID", style="cyan")
+                        table.add_column("Name", style="white")
+                        table.add_column("Current", style="bold red")
+
+                        for idx, m in enumerate(available_models, 1):
+                            model_id = m['id']
+                            name = m.get('name', m['id'])
+                            is_current = "★" if model_id == current['model'] else ""
+
+                            table.add_row(str(idx), model_id, name, is_current)
+
+                        console.print(table)
+
+                        model_choice = ask(f"\n모델 선택 (1-{len(available_models)})", default="1")
+
+                        try:
+                            idx = int(model_choice) - 1
+                            if 0 <= idx < len(available_models):
+                                new_model = available_models[idx]['id']
+                            else:
+                                console.print("[yellow]잘못된 선택입니다. 현재 모델 유지.[/yellow]")
+                                new_model = current['model']
+                        except ValueError:
+                            console.print("[yellow]숫자를 입력하세요. 현재 모델 유지.[/yellow]")
+                            new_model = current['model']
+                    else:
+                        console.print("[yellow]모델 조회 실패. 직접 입력으로 전환합니다.[/yellow]")
+                        new_model = ask("새 Model", default=current['model'])
+                else:
+                    # 직접 입력
+                    new_model = ask("새 Model", default=current['model'])
+
+                if new_model:
+                    update_data['model'] = new_model
 
             if field in ["api_key", "all"]:
                 from getpass import getpass
@@ -4197,6 +5034,10 @@ class PromptArsenal:
                     asyncio.run(self.multiturn_campaign())
                 elif choice == 'c':
                     self.multiturn_view_campaigns()
+                elif choice == 'a':
+                    asyncio.run(self.security_code_scanner())
+                elif choice == 'v':
+                    self.security_view_results()
                 elif choice == 's':
                     self.settings_api_profiles()
                 elif choice == 'j':

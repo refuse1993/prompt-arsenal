@@ -256,7 +256,7 @@ class MultimodalTester:
                 }
 
             # Save to database
-            self.db.insert_multimodal_test_result(
+            result_id = self.db.insert_multimodal_test_result(
                 media_id=media_id,
                 provider=self.provider,
                 model=self.model,
@@ -274,11 +274,12 @@ class MultimodalTester:
                 'response': result.response,
                 'vision_response': result.vision_response,
                 'response_time': result.response_time,
-                'judgment': judgment
+                'judgment': judgment,
+                'result_id': result_id
             }
         else:
             # Save error result
-            self.db.insert_multimodal_test_result(
+            result_id = self.db.insert_multimodal_test_result(
                 media_id=media_id,
                 provider=self.provider,
                 model=self.model,
@@ -295,7 +296,8 @@ class MultimodalTester:
                 'success': False,
                 'response': result.error_message,
                 'response_time': result.response_time,
-                'error': result.error_message
+                'error': result.error_message,
+                'result_id': result_id
             }
 
     async def test_media_batch(self, media_list: list, judge, prompt: str = None):

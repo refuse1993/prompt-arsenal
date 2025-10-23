@@ -234,6 +234,60 @@ class ArsenalDB:
             )
         ''')
 
+        # === Security Scanner Tables ===
+
+        # Security scans table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS security_scans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target TEXT NOT NULL,
+                scan_type TEXT DEFAULT 'static',
+                mode TEXT NOT NULL,
+                profile_name TEXT,
+                total_findings INTEGER DEFAULT 0,
+                critical_count INTEGER DEFAULT 0,
+                high_count INTEGER DEFAULT 0,
+                medium_count INTEGER DEFAULT 0,
+                low_count INTEGER DEFAULT 0,
+                scan_duration REAL,
+                llm_calls INTEGER DEFAULT 0,
+                llm_cost REAL DEFAULT 0.0,
+                tool_only_confirmed INTEGER DEFAULT 0,
+                llm_verified INTEGER DEFAULT 0,
+                false_positives_removed INTEGER DEFAULT 0,
+                started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                completed_at TEXT
+            )
+        ''')
+
+        # Security findings table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS security_findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_id INTEGER NOT NULL,
+                cwe_id TEXT NOT NULL,
+                cwe_name TEXT,
+                severity TEXT NOT NULL,
+                confidence REAL,
+                file_path TEXT NOT NULL,
+                line_number INTEGER,
+                column_number INTEGER,
+                function_name TEXT,
+                title TEXT,
+                description TEXT,
+                attack_scenario TEXT,
+                remediation TEXT,
+                remediation_code TEXT,
+                code_snippet TEXT,
+                context_code TEXT,
+                verified_by TEXT DEFAULT 'tool',
+                is_false_positive INTEGER DEFAULT 0,
+                llm_reasoning TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (scan_id) REFERENCES security_scans(id)
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -1156,3 +1210,152 @@ class ArsenalDB:
         conn.close()
 
         return [dict(row) for row in rows]
+
+    # === Security Scanner ===
+
+    def insert_security_scan(self, report) -> int:
+        """Insert security scan report"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO security_scans
+            (target, scan_type, mode, profile_name, total_findings,
+             critical_count, high_count, medium_count, low_count,
+             scan_duration, llm_calls, llm_cost,
+             tool_only_confirmed, llm_verified, false_positives_removed,
+             started_at, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            report.target,
+            report.scan_type,
+            report.mode,
+            report.profile_name if hasattr(report, 'profile_name') else None,
+            report.total_findings,
+            report.critical_count,
+            report.high_count,
+            report.medium_count,
+            report.low_count,
+            report.scan_duration,
+            report.llm_calls,
+            report.llm_cost,
+            report.tool_only_confirmed,
+            report.llm_verified,
+            report.false_positives_removed,
+            report.started_at.isoformat() if report.started_at else None,
+            report.completed_at.isoformat() if report.completed_at else None
+        ))
+
+        scan_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return scan_id
+
+    def insert_security_finding(self, scan_id: int, finding) -> int:
+        """Insert security finding"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO security_findings
+            (scan_id, cwe_id, cwe_name, severity, confidence,
+             file_path, line_number, column_number, function_name,
+             title, description, attack_scenario, remediation, remediation_code,
+             code_snippet, context_code, verified_by,
+             is_false_positive, llm_reasoning)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            scan_id,
+            finding.cwe_id,
+            finding.cwe_name,
+            finding.severity,
+            finding.confidence,
+            finding.file_path,
+            finding.line_number,
+            finding.column_number,
+            finding.function_name,
+            finding.title,
+            finding.description,
+            finding.attack_scenario,
+            finding.remediation,
+            finding.remediation_code if hasattr(finding, 'remediation_code') else '',
+            finding.code_snippet,
+            finding.context_code if hasattr(finding, 'context_code') else '',
+            finding.verified_by,
+            1 if finding.is_false_positive else 0,
+            finding.llm_reasoning if hasattr(finding, 'llm_reasoning') else None
+        ))
+
+        finding_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return finding_id
+
+    def get_security_scans(self, limit: int = 10) -> List[Dict]:
+        """Get recent security scans"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM security_scans
+            ORDER BY started_at DESC
+            LIMIT ?
+        ''', (limit,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_security_findings(self, scan_id: int) -> List[Dict]:
+        """Get all findings for a scan"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM security_findings
+            WHERE scan_id = ?
+            ORDER BY severity DESC, confidence DESC
+        ''', (scan_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_security_stats(self) -> Dict:
+        """Get security scanner statistics"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT COUNT(*) FROM security_scans')
+        total_scans = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM security_findings WHERE is_false_positive = 0')
+        total_findings = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM security_findings WHERE severity = "Critical" AND is_false_positive = 0')
+        critical_findings = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM security_findings WHERE severity = "High" AND is_false_positive = 0')
+        high_findings = cursor.fetchone()[0]
+
+        cursor.execute('''
+            SELECT AVG(scan_duration) FROM security_scans
+            WHERE completed_at IS NOT NULL
+        ''')
+        avg_duration = cursor.fetchone()[0] or 0.0
+
+        conn.close()
+
+        return {
+            'total_scans': total_scans,
+            'total_findings': total_findings,
+            'critical_findings': critical_findings,
+            'high_findings': high_findings,
+            'avg_scan_duration': round(avg_duration, 2)
+        }

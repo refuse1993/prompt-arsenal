@@ -61,50 +61,239 @@
 | **CWE-862** | Missing Authorization | 권한 검사 누락 | High |
 | **CWE-200** | Information Exposure | 민감 정보 로깅, 에러 메시지 노출 | Medium |
 
-**1.2 탐지 엔진**
+**1.2 탐지 엔진 (최신 도구 활용)**
 
 ```yaml
-탐지_방식:
-  규칙_기반:
-    - Regex 패턴 매칭 (빠름, 단순)
-    - AST(Abstract Syntax Tree) 분석 (정확, Python/JS)
-    - 데이터 흐름 추적 (Taint Analysis)
+Python_정적_분석_도구:
+  Semgrep_★추천:
+    설명: "최신 정적 분석 도구, 다중 언어 지원"
+    장점:
+      - YAML 기반 커스텀 규칙 작성 가능
+      - 3,000+ 내장 규칙 (OWASP, CWE)
+      - 빠른 속도 (AST 기반)
+      - CI/CD 통합 쉬움
+    설치: "pip install semgrep"
+    실행: "semgrep --config=auto --json ."
 
-  LLM_기반:
-    - GPT-4/Claude를 활용한 복잡한 로직 분석
-    - 비즈니스 로직 취약점 탐지
-    - False Positive 필터링
+  Bandit:
+    설명: "Python 보안 전용 스캐너"
+    장점:
+      - Python 특화
+      - 간단한 사용법
+      - JSON 출력 지원
+    설치: "pip install bandit"
+    실행: "bandit -r . -f json -o report.json"
 
-  도구_통합:
-    - Bandit (Python)
-    - ESLint Security (JavaScript)
-    - SonarQube
-    - Semgrep
+  Ruff:
+    설명: "초고속 Python linter (Rust 기반)"
+    장점:
+      - 매우 빠름 (10-100x)
+      - 보안 규칙 포함
+      - 최신 Python 지원
+    설치: "pip install ruff"
+    실행: "ruff check --select S --output-format json ."
+
+JavaScript_도구:
+  ESLint_Security:
+    설치: "npm install eslint-plugin-security"
+    실행: "eslint . --format json"
+
+통합_전략:
+  1단계: Semgrep/Bandit/Ruff 실행 (빠름, 무료)
+  2단계: 도구 결과를 통합/정규화
+  3단계: LLM이 결과 검증 및 보완 (API 프로필 사용)
+  4단계: False Positive 필터링
+  5단계: 추가 비즈니스 로직 분석 (LLM)
 ```
 
-**1.3 분석 프로세스**
+**도구 실행 예시**:
 
 ```python
-# 예시: 정적 분석 워크플로우
+import subprocess
+import json
+
 class StaticAnalyzer:
-    def analyze_file(self, filepath: str) -> SecurityReport:
-        # 1. 언어 감지
-        language = detect_language(filepath)
+    """기존 도구들을 통합하여 실행"""
 
-        # 2. AST 파싱
-        ast = parse_ast(filepath, language)
+    def run_semgrep(self, target: str) -> List[Finding]:
+        """Semgrep 실행 (최신, 추천)"""
+        result = subprocess.run(
+            ["semgrep", "--config=auto", "--json", target],
+            capture_output=True,
+            text=True
+        )
 
-        # 3. 규칙 기반 스캔
-        rule_findings = self.rule_scanner.scan(ast)
+        semgrep_results = json.loads(result.stdout)
+        findings = []
 
-        # 4. 데이터 흐름 분석
-        taint_findings = self.taint_analyzer.analyze(ast)
+        for r in semgrep_results['results']:
+            findings.append(Finding(
+                cwe_id=r['extra'].get('metadata', {}).get('cwe'),
+                file_path=r['path'],
+                line_number=r['start']['line'],
+                code_snippet=r['extra']['lines'],
+                severity=r['extra']['severity'],
+                title=r['check_id'],
+                confidence=0.8,  # Semgrep 결과는 높은 신뢰도
+                verified_by='semgrep'
+            ))
 
-        # 5. LLM 심층 분석 (옵션)
-        llm_findings = await self.llm_analyzer.analyze(filepath, rule_findings)
+        return findings
 
-        # 6. 결과 통합 및 우선순위 정렬
-        return SecurityReport.merge(rule_findings, taint_findings, llm_findings)
+    def run_bandit(self, target: str) -> List[Finding]:
+        """Bandit 실행 (Python 전용)"""
+        result = subprocess.run(
+            ["bandit", "-r", target, "-f", "json"],
+            capture_output=True,
+            text=True
+        )
+
+        bandit_results = json.loads(result.stdout)
+        findings = []
+
+        for r in bandit_results['results']:
+            findings.append(Finding(
+                cwe_id=r['test_id'],  # CWE mapping 필요
+                file_path=r['filename'],
+                line_number=r['line_number'],
+                code_snippet=r['code'],
+                severity=r['issue_severity'],
+                confidence=self._map_confidence(r['issue_confidence']),
+                verified_by='bandit'
+            ))
+
+        return findings
+
+    def run_ruff(self, target: str) -> List[Finding]:
+        """Ruff 실행 (초고속)"""
+        result = subprocess.run(
+            ["ruff", "check", "--select", "S", "--output-format", "json", target],
+            capture_output=True,
+            text=True
+        )
+
+        ruff_results = json.loads(result.stdout)
+        # Ruff 결과 파싱 및 Finding 변환
+        ...
+
+    async def run_all_tools(self, target: str) -> List[Finding]:
+        """모든 도구 병렬 실행"""
+        semgrep_task = asyncio.create_task(self.run_semgrep(target))
+        bandit_task = asyncio.create_task(self.run_bandit(target))
+        ruff_task = asyncio.create_task(self.run_ruff(target))
+
+        results = await asyncio.gather(semgrep_task, bandit_task, ruff_task)
+
+        # 결과 병합 및 중복 제거
+        all_findings = []
+        for findings in results:
+            all_findings.extend(findings)
+
+        # 중복 제거 (같은 위치, 같은 CWE)
+        deduplicated = self._deduplicate_findings(all_findings)
+
+        return deduplicated
+```
+
+**1.3 분석 프로세스 (도구 통합 + LLM)**
+
+```python
+class SecurityScanner:
+    """Semgrep/Bandit/Ruff + LLM 통합 스캐너"""
+
+    def __init__(self, db: ArsenalDB, profile_name: str = None):
+        self.db = db
+        self.static_analyzer = StaticAnalyzer()  # Semgrep/Bandit/Ruff 실행
+
+        # API 프로필 선택 시 LLM 분석기 활성화
+        if profile_name:
+            self.llm_analyzer = LLMSecurityAnalyzer(profile_name)
+        else:
+            self.llm_analyzer = None
+
+    async def scan_directory(self, target: str, mode: str = "hybrid") -> SecurityReport:
+        """
+        디렉토리 스캔
+
+        모드:
+        - rule_only: Semgrep/Bandit/Ruff만 (빠름, 무료)
+        - verify_with_llm: 도구 결과 → LLM 검증
+        - llm_detect: LLM 탐지 → 도구 교차검증
+        - hybrid: 도구 신뢰도 ≥0.8 → 확정, <0.8 → LLM 검증
+        """
+
+        # 1단계: Semgrep/Bandit/Ruff 병렬 실행
+        console.print("[bold blue]🔍 Running static analysis tools...[/]")
+        tool_findings = await self.static_analyzer.run_all_tools(target)
+
+        console.print(f"  Semgrep: {len(tool_findings['semgrep'])} findings")
+        console.print(f"  Bandit:  {len(tool_findings['bandit'])} findings")
+        console.print(f"  Ruff:    {len(tool_findings['ruff'])} findings")
+
+        # 2단계: 결과 통합 및 중복 제거
+        all_findings = self._merge_findings(tool_findings)
+
+        if mode == "rule_only":
+            # 도구 결과만 사용
+            return SecurityReport(findings=all_findings)
+
+        # 3단계: LLM 검증/분석
+        if not self.llm_analyzer:
+            console.print("[yellow]⚠️ LLM analyzer not configured. Using rule-only mode.[/]")
+            return SecurityReport(findings=all_findings)
+
+        verified_findings = []
+
+        if mode == "verify_with_llm":
+            # 모든 결과를 LLM이 검증
+            console.print("[bold blue]🤖 Verifying findings with LLM...[/]")
+            for finding in all_findings:
+                is_valid = await self.llm_analyzer.verify_finding(finding)
+                if is_valid:
+                    finding.verified_by = f"{finding.verified_by}+llm"
+                    verified_findings.append(finding)
+
+        elif mode == "hybrid":
+            # Hybrid: 신뢰도 높으면 바로 확정, 낮으면 LLM 검증
+            console.print("[bold blue]⚡ Hybrid mode: Smart verification[/]")
+            for finding in all_findings:
+                if finding.confidence >= 0.8:
+                    # 도구 신뢰도 높음 → 바로 확정
+                    verified_findings.append(finding)
+                else:
+                    # 불확실 → LLM 검증
+                    is_valid = await self.llm_analyzer.verify_finding(finding)
+                    if is_valid:
+                        finding.verified_by = f"{finding.verified_by}+llm"
+                        verified_findings.append(finding)
+
+        # 4단계: 추가 LLM 분석 (비즈니스 로직 취약점)
+        # Semgrep/Bandit이 못 찾는 복잡한 취약점
+        if mode == "llm_detect":
+            console.print("[bold blue]🧠 LLM deep analysis...[/]")
+            for file in self._get_python_files(target):
+                code = open(file).read()
+                llm_findings = await self.llm_analyzer.detect_vulnerabilities(code, file)
+
+                # LLM 발견 → 도구로 교차검증
+                for llm_finding in llm_findings:
+                    if self._is_confirmed_by_tools(llm_finding, all_findings):
+                        llm_finding['confidence'] = min(1.0, llm_finding['confidence'] + 0.2)
+                        llm_finding['verified_by'] = 'llm+tools'
+                    verified_findings.append(llm_finding)
+
+        # 5단계: DB 저장
+        scan_id = self.db.insert_security_scan(
+            scan_type="static",
+            target=target,
+            status="completed",
+            total_findings=len(verified_findings)
+        )
+
+        for finding in verified_findings:
+            self.db.insert_security_finding(scan_id=scan_id, **finding)
+
+        return SecurityReport(findings=verified_findings, scan_id=scan_id)
 ```
 
 ### 2. 동적 서버 분석 (DAST - Dynamic Application Security Testing)
@@ -602,29 +791,189 @@ CREATE INDEX idx_scans_target ON security_scans(target);
 
 ## 📊 사용 예시
 
-### 예시 1: 정적 분석 (CLI)
+### 예시 1: Interactive CLI 사용 (추천)
 
-```bash
-# 단일 파일 분석 (규칙 기반만)
-python interactive_cli.py --security-scan static --file app.py
+```
+$ python interactive_cli.py
 
-# 디렉토리 전체 스캔 (규칙 기반만)
-python interactive_cli.py --security-scan static --dir ./src --cwe-categories injection,xss,auth
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔒 Prompt Arsenal - Main Menu
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# LLM 검증 활성화 (API 프로필 선택)
-python interactive_cli.py --security-scan static --dir ./src --verify-with-llm --profile gpt4
+🛡️ Security Scanning
+  s1. 정적 코드 분석 (SAST)
+  s2. 동적 서버 스캔 (DAST)
+  s3. 스캔 결과 조회
+  s4. 보안 대시보드
 
-# LLM 직접 탐지 + 규칙 교차 검증
-python interactive_cli.py --security-scan static --dir ./src --llm-detect --profile claude
+선택 > s1
+```
 
-# Hybrid 모드 (규칙 먼저 → 불확실하면 LLM)
-python interactive_cli.py --security-scan static --dir ./src --mode hybrid --profile ollama
+**시나리오 A: 빠른 스캔 (도구만, 무료)**
 
-# 로컬 모델 사용 (비용 절감)
-python interactive_cli.py --security-scan static --dir ./src --mode hybrid --profile local_llama
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+정적 코드 분석 (SAST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# 리포트 생성
-python interactive_cli.py --security-scan static --dir ./src --output report.html --format sarif
+스캔 대상 선택:
+  1. 단일 파일
+  2. 디렉토리
+  3. GitHub 리포지토리
+
+선택 > 2
+
+디렉토리 경로: ./src
+
+분석 모드 선택:
+  1. 도구만 (빠름, 무료) ← 이것 선택
+  2. 도구 + LLM 검증 (정확, API 비용)
+  3. LLM 직접 탐지 (고급, API 비용 높음)
+  4. Hybrid 모드 (추천, 최적 균형)
+
+선택 > 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+스캔 시작 (도구만)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 Running static analysis tools...
+  [██████████----------] Semgrep (50%)
+  [████████████████----] Bandit (80%)
+  [████████████████████] Ruff (100%)
+
+Results:
+  Semgrep: 12 findings
+  Bandit:   8 findings
+  Ruff:     5 findings
+
+Merged: 18 unique findings (7 duplicates removed)
+
+총 발견 사항: 18개
+  Critical: 3
+  High: 6
+  Medium: 7
+  Low: 2
+
+스캔 시간: 8초
+비용: $0 (무료)
+
+리포트: /tmp/security_scan_20251023_143045.html
+```
+
+**시나리오 B: Hybrid 모드 (추천, Ollama 무료)**
+
+```
+선택 > 4 (Hybrid 모드)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+API 프로필 선택
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+사용 가능한 프로필:
+  1. gpt4         (OpenAI GPT-4o)        - 정확도 최고, $0.03/파일
+  2. gpt4_mini    (OpenAI GPT-4o-mini)   - 빠르고 저렴, $0.01/파일
+  3. claude       (Anthropic Claude 3.5) - 코드 분석 강함, $0.02/파일
+  4. ollama       (Ollama llama3.1:8b)   - 로컬 무료 ← 이것 선택
+  5. local_llama  (Local LLM)            - 완전 무료
+
+선택 > 4
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+스캔 시작 (Hybrid 모드)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 Running static analysis tools...
+  Semgrep: 12 findings
+  Bandit:   8 findings
+  Ruff:     5 findings
+
+⚡ Hybrid mode: Smart verification
+
+[1/18] CWE-89: SQL Injection (src/api/users.py:45)
+  도구 신뢰도: 95% → ✅ 확정 (LLM 검증 불필요)
+
+[2/18] CWE-798: Hardcoded Secret (src/config.py:12)
+  도구 신뢰도: 70% → 🤖 LLM 검증 중...
+  Ollama 응답: ✅ 실제 취약점 (신뢰도 92%)
+
+[3/18] CWE-306: Missing Auth (src/auth.py:23)
+  도구 신뢰도: 65% → 🤖 LLM 검증 중...
+  Ollama 응답: ❌ False Positive (테스트 코드)
+
+...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+스캔 완료
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+총 발견 사항: 15개 (3개 오탐 제거됨)
+  Critical: 2
+  High: 5
+  Medium: 6
+  Low: 2
+
+스캔 시간: 2분 18초
+LLM 호출: 5회 (신뢰도 낮은 것만)
+비용: $0 (Ollama 로컬)
+
+검증 통계:
+  도구만으로 확정: 13개 (72%)
+  LLM 검증 필요: 5개 (28%)
+  False Positive 제거: 3개
+
+리포트: /tmp/security_scan_20251023_143045.html
+```
+
+**시나리오 C: LLM 직접 탐지 (고급, GPT-4)**
+
+```
+선택 > 3 (LLM 직접 탐지)
+프로필 선택 > 1 (gpt4)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+스캔 시작 (LLM 직접 탐지)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 Running static analysis tools... (병렬)
+🧠 LLM deep analysis... (병렬)
+
+GPT-4 분석 중:
+  [1/45] src/api/users.py
+    → CWE-89: SQL Injection (Line 45)
+    → CWE-862: Missing Authorization (Line 67)
+    → CWE-201: Info Leak in Error Message (Line 89)
+
+  [2/45] src/auth.py
+    → CWE-306: Missing Session Timeout (Line 123)
+    → 비즈니스 로직: Race Condition (Line 156) ← 도구가 못 찾음!
+
+교차 검증:
+  LLM+도구 모두 탐지: 18개 (높은 신뢰도)
+  LLM만 탐지: 5개 (비즈니스 로직 취약점)
+  도구만 탐지: 3개 (LLM이 오탐으로 판단)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+스캔 완료
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+총 발견 사항: 23개
+  Critical: 4
+  High: 8
+  Medium: 8
+  Low: 3
+
+비즈니스 로직 취약점 (LLM 전용): 5개
+  - Race Condition in payment processing
+  - Weak session management
+  - Missing rate limiting
+  - Improper error handling revealing DB schema
+  - TOCTOU vulnerability in file upload
+
+스캔 시간: 5분 42초
+비용: $1.35 (GPT-4, 45 files)
+
+리포트: /tmp/security_scan_20251023_143045.html
 ```
 
 **출력 예시**:
@@ -676,20 +1025,63 @@ Scan Duration: 45.2s
 Report: /tmp/security_report_20251023_142530.html
 ```
 
-### 예시 2: 동적 서버 스캔 (CLI)
+### 예시 2: 동적 서버 스캔 (Interactive)
 
-```bash
-# 웹 서버 스캔
-python interactive_cli.py --security-scan dynamic \
-  --url https://example.com \
-  --auth-header "Authorization: Bearer token123" \
-  --crawl-depth 2
+```
+선택 > s2 (동적 서버 스캔)
 
-# API 전용 스캔
-python interactive_cli.py --security-scan dynamic \
-  --url https://api.example.com \
-  --openapi-spec ./swagger.json \
-  --test-categories injection,auth
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+동적 서버 스캔 (DAST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+대상 URL: https://example.com
+
+인증 방법:
+  1. 없음
+  2. Bearer Token
+  3. Session Cookie
+  4. API Key
+
+선택 > 2
+
+Bearer Token: sk-...
+
+크롤링 깊이 (1-5): 2
+
+테스트 카테고리:
+  1. 전체
+  2. Injection만 (SQL, XSS, Command)
+  3. 인증/권한
+  4. 설정 취약점
+
+선택 > 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+스캔 시작
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌐 크롤링 중...
+  발견된 엔드포인트: 47개
+  발견된 폼: 12개
+
+🔍 취약점 테스트 중...
+  [1/47] GET /api/users?id=1
+    → SQL Injection 테스트 (100개 페이로드)
+    → XSS 테스트 (50개 페이로드)
+
+  [2/47] POST /api/login
+    → 인증 우회 테스트
+    → Brute Force 방어 테스트
+
+...
+
+총 발견 사항: 8개
+  Critical: 2 (SQL Injection, Missing Auth)
+  High: 3 (XSS, CSRF)
+  Medium: 2 (Info Leak)
+  Low: 1 (Weak Headers)
+
+스캔 시간: 12분 35초
 ```
 
 ### 예시 3: Python API (API 프로필 활용)
@@ -963,56 +1355,76 @@ LLM 비용: $0.08 (Ollama 로컬이라 무료)
 
 ### Phase 1: 정적 분석 기본 (2-3주)
 
-**Week 1-2**: 규칙 기반 스캐너
+**Week 1**: 도구 통합 및 기본 구조
 - [ ] 프로젝트 구조 생성 (`security/` 디렉토리)
+- [ ] **Semgrep 통합**: JSON 출력 파싱, Finding 객체 변환
+- [ ] **Bandit 통합**: JSON 출력 파싱, CWE 매핑
+- [ ] **Ruff 통합**: 보안 규칙 (--select S) 실행
+- [ ] 도구 결과 병합 및 중복 제거 로직
 - [ ] CWE 데이터베이스 구축 (Top 25)
-- [ ] Python AST 파서 구현
-- [ ] 기본 규칙 엔진 (CWE-79, CWE-89, CWE-78, CWE-22, CWE-798)
-- [ ] DB 스키마 추가 (security_scans, security_findings)
-- [ ] CLI 메뉴 통합 (s1, s2, s3)
+
+**Week 2**: DB 및 CLI 통합
+- [ ] DB 스키마 추가 (security_scans, security_findings, cwe_database)
+- [ ] Interactive CLI 메뉴 통합 (s1, s2, s3)
+- [ ] 스캔 대상 선택 (파일/디렉토리/GitHub)
+- [ ] 분석 모드 선택 (도구만/Hybrid/LLM)
+- [ ] API 프로필 선택 UI
 
 **Week 3**: 리포팅
-- [ ] Rich 테이블 출력
+- [ ] Rich 테이블 출력 (진행 상황, 결과 요약)
 - [ ] HTML 리포트 생성
 - [ ] JSON/SARIF 내보내기
+- [ ] CWE 상세 정보 표시
 
-**결과물**: `python interactive_cli.py --security-scan static --file app.py` 동작
+**결과물**: Interactive CLI에서 `s1` 선택 → Semgrep/Bandit/Ruff 스캔 동작
 
 ---
 
-### Phase 2: 동적 분석 & LLM 통합 (3-4주)
+### Phase 2: LLM 통합 (2-3주)
 
-**Week 4-5**: 동적 스캐너
+**Week 4-5**: LLM 분석기 구현
+- [ ] **LLMSecurityAnalyzer 클래스**: API 프로필 자동 로드
+- [ ] **verify_finding()**: 도구 결과 → LLM 검증 (False Positive 필터)
+- [ ] **detect_vulnerabilities()**: LLM 직접 탐지 → 도구 교차검증
+- [ ] **hybrid_analyze()**: HybridJudge 패턴 적용
+- [ ] 비즈니스 로직 취약점 탐지 프롬프트 설계
+- [ ] Ollama 로컬 모델 테스트 (무료 스캔)
+
+**Week 6**: Hybrid 모드 최적화
+- [ ] 신뢰도 임계값 조정 (0.8 기준)
+- [ ] LLM 호출 최소화 로직 (비용 절감)
+- [ ] 검증 통계 수집 (도구 확정 비율, LLM 호출 횟수)
+- [ ] 성능 측정 (스캔 시간, 비용)
+
+**결과물**: Hybrid 모드로 80% 비용 절감 + 95% 정확도 달성
+
+---
+
+### Phase 3: 동적 스캔 & 대시보드 (2-3주)
+
+**Week 7-8**: 동적 스캐너
 - [ ] 웹 크롤러 (Playwright 통합)
-- [ ] SQL Injection 페이로드 테스트
+- [ ] SQL Injection 페이로드 테스트 (기존 payload_utils 활용)
 - [ ] XSS 페이로드 테스트 (DOM 기반)
-- [ ] 기존 `payload_utils.py` 활용
+- [ ] 기존 프롬프트 DB 활용 (40,000+ 페이로드)
+- [ ] 동적 스캔 결과 DB 저장
 
-**Week 6-7**: LLM 분석기
-- [ ] LLM 코드 분석 프롬프트 설계
-- [ ] 비즈니스 로직 취약점 탐지
-- [ ] False Positive 필터
-- [ ] Hybrid Judge 통합
+**Week 9**: 보안 대시보드
+- [ ] `security_dashboard.html` 생성
+- [ ] API 엔드포인트 (`/api/security/scans`, `/api/security/findings`)
+- [ ] 실시간 스캔 진행 상황 표시
+- [ ] CWE 분포 차트, 트렌드 분석
 
-**결과물**: 동적 + LLM 분석 완료
+**결과물**: 완전한 SAST + DAST + 대시보드 시스템
 
 ---
 
-### Phase 3: 대시보드 & 고급 기능 (2-3주)
+### Phase 4 (옵션): 고급 기능 (1-2주)
 
-**Week 8-9**: 보안 대시보드
-- [ ] `security_dashboard.html` 생성
-- [ ] API 엔드포인트 (`/api/security/*`)
-- [ ] 실시간 스캔 진행 상황
-- [ ] CWE 통계 차트
-
-**Week 10**: 고급 분석
-- [ ] 데이터 흐름 추적 (Taint Analysis)
-- [ ] JavaScript/Java 파서 추가
+- [ ] JavaScript/Java 지원 (ESLint Security 통합)
 - [ ] GitHub 리포지토리 직접 스캔
 - [ ] CI/CD 통합 (GitHub Actions)
-
-**결과물**: 완전한 보안 스캐닝 시스템
+- [ ] 커스텀 Semgrep 규칙 작성
 
 ---
 
