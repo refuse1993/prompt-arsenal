@@ -103,6 +103,15 @@ class LLMTester:
                 error_message=str(e)
             )
 
+    def _get_openai_token_param(self, max_tokens: int) -> dict:
+        """Get appropriate token parameter for OpenAI model"""
+        # GPT-5, o1 series use max_completion_tokens
+        if self.model.startswith(('gpt-5', 'o1')):
+            return {"max_completion_tokens": max_tokens}
+        # Older models use max_tokens
+        else:
+            return {"max_tokens": max_tokens}
+
     async def _call_openai(self, prompt: str) -> str:
         """Call OpenAI API"""
         if not openai:
@@ -110,11 +119,14 @@ class LLMTester:
 
         client = openai.AsyncOpenAI(api_key=self.api_key)
 
+        # Get appropriate token parameter
+        token_param = self._get_openai_token_param(500)
+
         response = await client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=500
+            **token_param
         )
 
         return response.choices[0].message.content
