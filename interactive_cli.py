@@ -2669,48 +2669,52 @@ class PromptArsenal:
     def _generate_image_for_test(self, prompt, attack_type, profile):
         """Generate image for testing"""
         from multimodal.image_generator import ImageGenerator
-
-        console.print("\n[cyan]이미지 생성 방법:[/cyan]")
+        import os
+        from datetime import datetime
 
         # Check if current profile supports image generation
-        supports_image_gen = profile['provider'] in ['openai', 'dalle']
+        supported_providers = ['openai', 'google']
+        if profile['provider'] not in supported_providers:
+            console.print(f"[red]현재 프로필({profile['provider']})은 이미지 생성을 지원하지 않습니다.[/red]")
+            console.print(f"[yellow]지원되는 프로바이더: {', '.join(supported_providers)}[/yellow]")
+            return None, None, None
 
-        if supports_image_gen:
-            console.print(f"  [green]1[/green]. {profile['provider'].upper()} (현재 프로필: {profile['model']})")
-            console.print("  [green]2[/green]. 타이포그래피 (로컬)")
-            gen_method = ask("생성 방법", choices=["1", "2"], default="1")
-        else:
-            console.print(f"  [yellow]현재 프로필({profile['provider']})은 이미지 생성을 지원하지 않습니다.[/yellow]")
-            console.print("  [green]1[/green]. 타이포그래피 (로컬)")
-            gen_method = "2"
+        console.print(f"\n[cyan]현재 프로필로 이미지 생성[/cyan]")
+        console.print(f"  Provider: {profile['provider']}")
+        console.print(f"  Model: {profile['model']}")
 
-        if gen_method == "1":
-            # Use current profile
-            generator = ImageGenerator(
-                provider=profile['provider'],
-                model=profile['model'],
-                api_key=profile['api_key']
-            )
+        # Create output directory and file path
+        output_dir = os.path.join(os.getcwd(), 'generated_media', 'image')
+        os.makedirs(output_dir, exist_ok=True)
 
-            console.print(f"\n[yellow]🎨 {profile['model']}로 이미지 생성 중...[/yellow]")
-            result = asyncio.run(generator.generate_dalle(prompt, attack_type))
-        else:
-            # Typography
-            generator = ImageGenerator()
-            console.print(f"\n[yellow]🎨 타이포그래피 이미지 생성 중...[/yellow]")
-            result = generator.generate_typography(prompt, attack_type)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(output_dir, f"image_{attack_type}_{timestamp}.png")
 
-        if result.get('success'):
-            media_id = self.db.insert_media(
-                media_type='image',
-                attack_type=attack_type,
-                text_prompt=prompt,
-                generated_file=result['file_path']
-            )
-            console.print(f"[green]✅ 이미지 생성 완료: {result['file_path']}[/green]")
-            return media_id, result['file_path'], attack_type
-        else:
-            console.print(f"[red]이미지 생성 실패: {result.get('error', 'Unknown')}[/red]")
+        generator = ImageGenerator(
+            provider=profile['provider'],
+            model=profile['model'],  # Use profile model directly
+            api_key=profile['api_key']
+        )
+
+        console.print(f"\n[yellow]🎨 {profile['model']}로 이미지 생성 중...[/yellow]")
+
+        try:
+            file_path = asyncio.run(generator.generate(prompt, output_path))
+
+            if file_path:
+                media_id = self.db.insert_media(
+                    media_type='image',
+                    attack_type=attack_type,
+                    text_prompt=prompt,
+                    generated_file=file_path
+                )
+                console.print(f"[green]✅ 이미지 생성 완료: {file_path}[/green]")
+                return media_id, file_path, attack_type
+            else:
+                console.print(f"[red]이미지 생성 실패[/red]")
+                return None, None, None
+        except Exception as e:
+            console.print(f"[red]이미지 생성 실패: {e}[/red]")
             return None, None, None
 
     def _generate_audio_for_test(self, prompt, attack_type, profile):
@@ -2720,14 +2724,15 @@ class PromptArsenal:
         from datetime import datetime
 
         # Check if current profile supports TTS
-        if profile['provider'] != 'openai':
-            console.print(f"[red]현재 프로필({profile['provider']})은 TTS를 지원하지 않습니다. OpenAI 프로필이 필요합니다.[/red]")
+        supported_providers = ['openai', 'google']
+        if profile['provider'] not in supported_providers:
+            console.print(f"[red]현재 프로필({profile['provider']})은 TTS를 지원하지 않습니다.[/red]")
+            console.print(f"[yellow]지원되는 프로바이더: {', '.join(supported_providers)}[/yellow]")
             return None, None, None
 
-        # Use TTS model if specified in profile, otherwise default to tts-1
-        tts_model = profile['model'] if profile['model'].startswith('tts-') else 'tts-1'
-
-        console.print(f"\n[cyan]현재 프로필({profile['provider']})로 TTS 생성 (모델: {tts_model})[/cyan]")
+        console.print(f"\n[cyan]현재 프로필로 TTS 생성[/cyan]")
+        console.print(f"  Provider: {profile['provider']}")
+        console.print(f"  Model: {profile['model']}")
 
         # Create output directory and file path
         output_dir = os.path.join(os.getcwd(), 'generated_media', 'audio')
@@ -2738,11 +2743,11 @@ class PromptArsenal:
 
         generator = AudioGenerator(
             provider=profile['provider'],
-            model=tts_model,
+            model=profile['model'],
             api_key=profile['api_key']
         )
 
-        console.print(f"\n[yellow]🎵 {tts_model}로 오디오 생성 중...[/yellow]")
+        console.print(f"\n[yellow]🎵 {profile['model']}로 오디오 생성 중...[/yellow]")
 
         try:
             file_path = asyncio.run(generator.generate(prompt, output_path))

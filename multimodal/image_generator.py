@@ -19,7 +19,7 @@ class ImageGenerator:
     def __init__(self, provider: str, api_key: str = None, model: str = None, **kwargs):
         """
         Args:
-            provider: 'dalle', 'stable-diffusion', 'replicate'
+            provider: 'dalle', 'stable-diffusion', 'replicate', 'google'
             api_key: API key for the service
             model: Model name (provider-specific)
             **kwargs: Additional provider-specific settings
@@ -35,6 +35,8 @@ class ImageGenerator:
                 self.model = 'dall-e-3'
             elif self.provider == 'stable-diffusion':
                 self.model = 'stable-diffusion-xl-1024-v1-0'
+            elif self.provider == 'google':
+                self.model = 'imagegeneration@006'  # Google Imagen model
 
     async def generate(self, prompt: str, output_path: str, **kwargs) -> Optional[str]:
         """
@@ -54,6 +56,8 @@ class ImageGenerator:
             return await self._generate_stable_diffusion(prompt, output_path, **kwargs)
         elif self.provider == 'replicate':
             return await self._generate_replicate(prompt, output_path, **kwargs)
+        elif self.provider == 'google':
+            return await self._generate_google_imagen(prompt, output_path, **kwargs)
         else:
             raise ValueError(f"Unsupported provider: {self.provider}")
 
@@ -243,4 +247,69 @@ class ImageGenerator:
 
         except Exception as e:
             print(f"Replicate generation failed: {e}")
+            return None
+
+    async def _generate_google_imagen(self, prompt: str, output_path: str, **kwargs) -> Optional[str]:
+        """
+        Generate image using Google Imagen
+
+        Supports: Imagen models via Vertex AI
+        """
+        try:
+            from google.cloud import aiplatform
+            from google.cloud.aiplatform.gapic.schema import predict
+            import asyncio
+
+            # Synchronous generation function
+            def _generate():
+                # Initialize Vertex AI
+                project_id = self.config.get('project_id')
+                location = self.config.get('location', 'us-central1')
+
+                if not project_id:
+                    raise ValueError("Google Cloud project_id is required in config")
+
+                aiplatform.init(project=project_id, location=location)
+
+                # Prepare prediction parameters
+                parameters = {
+                    "sampleCount": kwargs.get('sample_count', 1),
+                }
+
+                # Add optional parameters
+                if 'aspect_ratio' in kwargs:
+                    parameters['aspectRatio'] = kwargs['aspect_ratio']
+                if 'negative_prompt' in kwargs:
+                    parameters['negativePrompt'] = kwargs['negative_prompt']
+
+                # Create endpoint client
+                endpoint = aiplatform.Endpoint(
+                    endpoint_name=f"projects/{project_id}/locations/{location}/publishers/google/models/{self.model}"
+                )
+
+                # Generate image
+                response = endpoint.predict(
+                    instances=[{"prompt": prompt}],
+                    parameters=parameters
+                )
+
+                # Get image data (base64 encoded)
+                if response.predictions:
+                    image_bytes = base64.b64decode(response.predictions[0]['bytesBase64Encoded'])
+
+                    # Save image
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    with open(output_path, 'wb') as f:
+                        f.write(image_bytes)
+
+                    return output_path
+                else:
+                    return None
+
+            # Run in executor
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, _generate)
+
+        except Exception as e:
+            print(f"Google Imagen generation failed: {e}")
             return None

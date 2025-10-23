@@ -18,7 +18,7 @@ class AudioGenerator:
     def __init__(self, provider: str, api_key: str = None, model: str = None, **kwargs):
         """
         Args:
-            provider: 'openai', 'elevenlabs', 'azure'
+            provider: 'openai', 'google', 'elevenlabs', 'azure'
             api_key: API key for the service
             model: Model name (provider-specific)
             **kwargs: Additional provider-specific settings
@@ -32,6 +32,8 @@ class AudioGenerator:
         if not self.model:
             if self.provider == 'openai':
                 self.model = 'tts-1'  # tts-1, tts-1-hd
+            elif self.provider == 'google':
+                self.model = 'en-US-Neural2-C'  # Google Cloud TTS voice
 
     async def generate(self, text: str, output_path: str, **kwargs) -> Optional[str]:
         """
@@ -47,6 +49,8 @@ class AudioGenerator:
         """
         if self.provider == 'openai':
             return await self._generate_openai(text, output_path, **kwargs)
+        elif self.provider == 'google':
+            return await self._generate_google(text, output_path, **kwargs)
         elif self.provider == 'elevenlabs':
             return await self._generate_elevenlabs(text, output_path, **kwargs)
         elif self.provider == 'azure':
@@ -91,6 +95,58 @@ class AudioGenerator:
 
         except Exception as e:
             print(f"OpenAI TTS generation failed: {e}")
+            return None
+
+    async def _generate_google(self, text: str, output_path: str, **kwargs) -> Optional[str]:
+        """
+        Generate audio using Google Cloud Text-to-Speech
+
+        Supports: Neural2 voices, Wavenet voices, Standard voices
+        """
+        try:
+            from google.cloud import texttospeech
+            import asyncio
+
+            # Create client (synchronous)
+            def _generate():
+                client = texttospeech.TextToSpeechClient()
+
+                # Set input text
+                synthesis_input = texttospeech.SynthesisInput(text=text)
+
+                # Configure voice
+                voice = texttospeech.VoiceSelectionParams(
+                    language_code=kwargs.get('language_code', 'en-US'),
+                    name=self.model
+                )
+
+                # Configure audio
+                audio_config = texttospeech.AudioConfig(
+                    audio_encoding=texttospeech.AudioEncoding.MP3,
+                    speaking_rate=kwargs.get('speaking_rate', 1.0),
+                    pitch=kwargs.get('pitch', 0.0)
+                )
+
+                # Generate audio
+                response = client.synthesize_speech(
+                    input=synthesis_input,
+                    voice=voice,
+                    audio_config=audio_config
+                )
+
+                # Save audio
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                with open(output_path, 'wb') as f:
+                    f.write(response.audio_content)
+
+                return output_path
+
+            # Run in executor
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, _generate)
+
+        except Exception as e:
+            print(f"Google TTS generation failed: {e}")
             return None
 
     async def _generate_elevenlabs(self, text: str, output_path: str, **kwargs) -> Optional[str]:
