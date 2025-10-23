@@ -2765,9 +2765,57 @@ class PromptArsenal:
 
     def _generate_video_for_test(self, prompt, attack_type, profile=None):
         """Generate video for testing"""
-        console.print("[yellow]⚠️  비디오 생성은 현재 지원하지 않습니다.[/yellow]")
-        console.print("[dim]비디오 생성 API (Runway, Pika 등)는 별도의 API 키와 설정이 필요합니다.[/dim]")
-        return None, None, None
+        from multimodal.video_generator import VideoGenerator
+        import os
+        from datetime import datetime
+
+        console.print("\n[cyan]비디오 생성 프로바이더 선택:[/cyan]")
+        console.print("  [green]1[/green]. Runway Gen-2")
+        console.print("  [green]2[/green]. Pika")
+        console.print("  [green]3[/green]. Stability AI")
+
+        provider_choice = ask("프로바이더 선택", choices=["1", "2", "3"], default="1")
+        provider_map = {"1": "runway", "2": "pika", "3": "stability"}
+        video_provider = provider_map[provider_choice]
+
+        # API 키 입력
+        api_key = ask(f"{video_provider.upper()} API 키", default="")
+        if not api_key:
+            console.print(f"[red]{video_provider.upper()} API 키가 필요합니다.[/red]")
+            return None, None, None
+
+        # Create output directory and file path
+        output_dir = os.path.join(os.getcwd(), 'generated_media', 'video')
+        os.makedirs(output_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(output_dir, f"video_{attack_type}_{timestamp}.mp4")
+
+        generator = VideoGenerator(
+            provider=video_provider,
+            api_key=api_key
+        )
+
+        console.print(f"\n[yellow]📹 {video_provider.upper()}로 비디오 생성 중...[/yellow]")
+
+        try:
+            file_path = asyncio.run(generator.generate(prompt, output_path))
+
+            if file_path:
+                media_id = self.db.insert_media(
+                    media_type='video',
+                    attack_type=attack_type,
+                    text_prompt=prompt,
+                    generated_file=file_path
+                )
+                console.print(f"[green]✅ 비디오 생성 완료: {file_path}[/green]")
+                return media_id, file_path, attack_type
+            else:
+                console.print(f"[red]비디오 생성 실패[/red]")
+                return None, None, None
+        except Exception as e:
+            console.print(f"[red]비디오 생성 실패: {e}[/red]")
+            return None, None, None
 
     def _select_media_from_arsenal(self):
         """Select media from arsenal"""
