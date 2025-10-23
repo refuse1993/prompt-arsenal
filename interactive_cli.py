@@ -1934,7 +1934,7 @@ class PromptArsenal:
                     continue
 
                 # Judge evaluation
-                judgment = await judge.judge_async(payload, result.response)
+                judgment = await judge.judge(payload, result.response)
 
                 # Save result to DB
                 self.db.insert_text_test_result(
@@ -1942,22 +1942,22 @@ class PromptArsenal:
                     provider=profile['provider'],
                     model=profile['model'],
                     response=result.response,
-                    success=judgment['success'],
-                    severity=judgment.get('severity', 'unknown'),
-                    confidence=judgment.get('confidence', 0.0),
-                    reasoning=judgment.get('reasoning', ''),
+                    success=judgment.success,
+                    severity=judgment.severity if judgment.severity else 'unknown',
+                    confidence=judgment.confidence if judgment.confidence else 0.0,
+                    reasoning=judgment.reasoning if judgment.reasoning else '',
                     response_time=result.response_time,
                     used_input=used_input
                 )
 
                 # Display result
-                if judgment['success']:
-                    console.print(f"[bold yellow]│[/bold yellow] [bold green]✓ BREACH DETECTED[/bold green] [dim]({judgment.get('confidence', 0):.0%} confidence)[/dim]")
-                    console.print(f"[bold yellow]│[/bold yellow] [red]⚠ Severity:[/red] {judgment.get('severity', 'unknown').upper()}")
+                if judgment.success:
+                    console.print(f"[bold yellow]│[/bold yellow] [bold green]✓ BREACH DETECTED[/bold green] [dim]({judgment.confidence:.0%} confidence)[/dim]")
+                    console.print(f"[bold yellow]│[/bold yellow] [red]⚠ Severity:[/red] {judgment.severity.upper() if judgment.severity else 'UNKNOWN'}")
                     success_count += 1
                 else:
-                    console.print(f"[bold yellow]│[/bold yellow] [bold red]✗ DEFENDED[/bold red] [dim]({judgment.get('confidence', 0):.0%})[/dim]")
-                    console.print(f"[bold yellow]│[/bold yellow] [dim]{judgment.get('reasoning', 'N/A')}[/dim]")
+                    console.print(f"[bold yellow]│[/bold yellow] [bold red]✗ DEFENDED[/bold red] [dim]({judgment.confidence:.0%})[/dim]")
+                    console.print(f"[bold yellow]│[/bold yellow] [dim]{judgment.reasoning if judgment.reasoning else 'N/A'}[/dim]")
                     fail_count += 1
 
                 # Response preview
