@@ -918,6 +918,215 @@ def serve_generated_images(filepath):
     return send_from_directory(images_dir, filepath)
 
 
+@app.route('/api/scans', methods=['GET'])
+def get_scans():
+    """Get security scans"""
+    limit = int(request.args.get('limit', 50))
+    scan_type = request.args.get('type')  # static, llm, all
+
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+
+    query = """
+        SELECT id, target, scan_type, mode, profile_name,
+               total_findings, critical_count, high_count, medium_count, low_count,
+               scan_duration, started_at, completed_at
+        FROM security_scans
+    """
+
+    params = []
+    if scan_type and scan_type != 'all':
+        query += " WHERE scan_type = ?"
+        params.append(scan_type)
+
+    query += " ORDER BY started_at DESC LIMIT ?"
+    params.append(limit)
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+
+    scans = []
+    for row in rows:
+        scans.append({
+            'id': row[0],
+            'target': row[1],
+            'scan_type': row[2],
+            'mode': row[3],
+            'profile_name': row[4],
+            'total_findings': row[5],
+            'critical_count': row[6],
+            'high_count': row[7],
+            'medium_count': row[8],
+            'low_count': row[9],
+            'scan_duration': row[10],
+            'started_at': row[11],
+            'completed_at': row[12]
+        })
+
+    conn.close()
+
+    return jsonify({
+        'scans': scans,
+        'total': len(scans)
+    })
+
+
+@app.route('/api/scans/<int:scan_id>', methods=['GET'])
+def get_scan_detail(scan_id):
+    """Get scan details with findings"""
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+
+    # Get scan info
+    cursor.execute("""
+        SELECT id, target, scan_type, mode, profile_name,
+               total_findings, critical_count, high_count, medium_count, low_count,
+               scan_duration, started_at, completed_at
+        FROM security_scans
+        WHERE id = ?
+    """, (scan_id,))
+
+    scan_row = cursor.fetchone()
+    if not scan_row:
+        conn.close()
+        return jsonify({'error': 'Scan not found'}), 404
+
+    scan = {
+        'id': scan_row[0],
+        'target': scan_row[1],
+        'scan_type': scan_row[2],
+        'mode': scan_row[3],
+        'profile_name': scan_row[4],
+        'total_findings': scan_row[5],
+        'critical_count': scan_row[6],
+        'high_count': scan_row[7],
+        'medium_count': scan_row[8],
+        'low_count': scan_row[9],
+        'scan_duration': scan_row[10],
+        'started_at': scan_row[11],
+        'completed_at': scan_row[12]
+    }
+
+    # Get findings
+    cursor.execute("""
+        SELECT id, cwe_id, cwe_name, severity, confidence,
+               file_path, line_number, column_number, function_name,
+               code_snippet, message, llm_reasoning, created_at
+        FROM security_findings
+        WHERE scan_id = ?
+        ORDER BY
+            CASE severity
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+                ELSE 5
+            END,
+            confidence DESC
+    """, (scan_id,))
+
+    findings_rows = cursor.fetchall()
+    findings = []
+    for row in findings_rows:
+        findings.append({
+            'id': row[0],
+            'cwe_id': row[1],
+            'cwe_name': row[2],
+            'severity': row[3],
+            'confidence': row[4],
+            'file_path': row[5],
+            'line_number': row[6],
+            'column_number': row[7],
+            'function_name': row[8],
+            'code_snippet': row[9],
+            'message': row[10],
+            'llm_reasoning': row[11],
+            'created_at': row[12]
+        })
+
+    scan['findings'] = findings
+    conn.close()
+
+    return jsonify(scan)
+
+
+@app.route('/api/scans/stats', methods=['GET'])
+def get_scan_stats():
+    """Get scan statistics"""
+    conn = sqlite3.connect(db.db_path)
+    cursor = conn.cursor()
+
+    # Total scans
+    cursor.execute("SELECT COUNT(*) FROM security_scans")
+    total_scans = cursor.fetchone()[0]
+
+    # Scans by type
+    cursor.execute("""
+        SELECT scan_type, COUNT(*) as count
+        FROM security_scans
+        GROUP BY scan_type
+    """)
+    scans_by_type = {row[0]: row[1] for row in cursor.fetchall()}
+
+    # Total findings by severity
+    cursor.execute("""
+        SELECT
+            SUM(critical_count) as critical,
+            SUM(high_count) as high,
+            SUM(medium_count) as medium,
+            SUM(low_count) as low
+        FROM security_scans
+    """)
+    severity_row = cursor.fetchone()
+    findings_by_severity = {
+        'critical': severity_row[0] or 0,
+        'high': severity_row[1] or 0,
+        'medium': severity_row[2] or 0,
+        'low': severity_row[3] or 0
+    }
+
+    # Most common CWEs
+    cursor.execute("""
+        SELECT cwe_id, cwe_name, COUNT(*) as count
+        FROM security_findings
+        GROUP BY cwe_id, cwe_name
+        ORDER BY count DESC
+        LIMIT 10
+    """)
+    top_cwes = [
+        {'cwe_id': row[0], 'cwe_name': row[1], 'count': row[2]}
+        for row in cursor.fetchall()
+    ]
+
+    # Recent scans
+    cursor.execute("""
+        SELECT id, target, scan_type, total_findings, started_at
+        FROM security_scans
+        ORDER BY started_at DESC
+        LIMIT 5
+    """)
+    recent_scans = [
+        {
+            'id': row[0],
+            'target': row[1],
+            'scan_type': row[2],
+            'total_findings': row[3],
+            'started_at': row[4]
+        }
+        for row in cursor.fetchall()
+    ]
+
+    conn.close()
+
+    return jsonify({
+        'total_scans': total_scans,
+        'scans_by_type': scans_by_type,
+        'findings_by_severity': findings_by_severity,
+        'top_cwes': top_cwes,
+        'recent_scans': recent_scans
+    })
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5002))
     app.run(host='0.0.0.0', port=port, debug=True)

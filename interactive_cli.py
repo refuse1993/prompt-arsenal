@@ -2672,11 +2672,10 @@ class PromptArsenal:
         import os
         from datetime import datetime
 
-        # Check if current profile supports image generation
-        supported_providers = ['openai', 'google']
-        if profile['provider'] not in supported_providers:
-            console.print(f"[red]현재 프로필({profile['provider']})은 이미지 생성을 지원하지 않습니다.[/red]")
-            console.print(f"[yellow]지원되는 프로바이더: {', '.join(supported_providers)}[/yellow]")
+        # Check if current profile is image type
+        if profile.get('type') != 'image':
+            console.print(f"[red]현재 프로필은 이미지 생성용이 아닙니다 (type: {profile.get('type', 'llm')})[/red]")
+            console.print(f"[yellow]이미지 생성 프로필을 선택하세요 (openai-image, gemini-image 등)[/yellow]")
             return None, None, None
 
         console.print(f"\n[cyan]현재 프로필로 이미지 생성[/cyan]")
@@ -2723,11 +2722,10 @@ class PromptArsenal:
         import os
         from datetime import datetime
 
-        # Check if current profile supports TTS
-        supported_providers = ['openai', 'google']
-        if profile['provider'] not in supported_providers:
-            console.print(f"[red]현재 프로필({profile['provider']})은 TTS를 지원하지 않습니다.[/red]")
-            console.print(f"[yellow]지원되는 프로바이더: {', '.join(supported_providers)}[/yellow]")
+        # Check if current profile is audio type
+        if profile.get('type') != 'audio':
+            console.print(f"[red]현재 프로필은 오디오 생성용이 아닙니다 (type: {profile.get('type', 'llm')})[/red]")
+            console.print(f"[yellow]오디오 생성 프로필을 선택하세요 (openai-tts, gemini-tts 등)[/yellow]")
             return None, None, None
 
         console.print(f"\n[cyan]현재 프로필로 TTS 생성[/cyan]")
@@ -4181,7 +4179,25 @@ class PromptArsenal:
                 return
 
             console.print("\n[cyan]✏️  프로필 수정[/cyan]")
-            name = ask("수정할 프로필 이름", choices=list(profiles.keys()))
+
+            # 프로필 목록 번호로 표시
+            profile_list = list(profiles.keys())
+            for idx, pname in enumerate(profile_list, 1):
+                p = profiles[pname]
+                console.print(f"  [cyan]{idx}.[/cyan] {pname} ({p['provider']} / {p['model']})")
+
+            choice = ask(f"\n수정할 프로필 번호 (1-{len(profile_list)})", default="0")
+
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(profile_list):
+                    name = profile_list[idx]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
 
             current = profiles[name]
             console.print(f"\n현재 설정:")
@@ -4292,7 +4308,25 @@ class PromptArsenal:
                 return
 
             console.print("\n[red]🗑️  프로필 삭제[/red]")
-            name = ask("삭제할 프로필", choices=list(profiles.keys()))
+
+            # 프로필 목록 번호로 표시
+            profile_list = list(profiles.keys())
+            for idx, pname in enumerate(profile_list, 1):
+                p = profiles[pname]
+                console.print(f"  [cyan]{idx}.[/cyan] {pname} ({p['provider']} / {p['model']})")
+
+            choice = ask(f"\n삭제할 프로필 번호 (1-{len(profile_list)})", default="0")
+
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(profile_list):
+                    name = profile_list[idx]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
 
             if confirm(f"'{name}' 프로필을 정말 삭제하시겠습니까?"):
                 self.config.delete_profile(name)
@@ -4310,7 +4344,26 @@ class PromptArsenal:
                 return
 
             console.print("\n[cyan]⭐ 기본 프로필 설정[/cyan]")
-            name = ask("기본 프로필", choices=list(profiles.keys()))
+
+            # 프로필 목록 번호로 표시
+            profile_list = list(profiles.keys())
+            for idx, pname in enumerate(profile_list, 1):
+                p = profiles[pname]
+                is_default = " [bold green](현재 기본)[/bold green]" if pname == default_profile else ""
+                console.print(f"  [cyan]{idx}.[/cyan] {pname} ({p['provider']} / {p['model']}){is_default}")
+
+            choice = ask(f"\n기본 프로필 번호 (1-{len(profile_list)})", default="0")
+
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(profile_list):
+                    name = profile_list[idx]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
             self.config.set_default_profile(name)
             console.print(f"[green]✅ '{name}'을 기본 프로필로 설정했습니다.[/green]")
 
@@ -4320,7 +4373,25 @@ class PromptArsenal:
                 return
 
             console.print("\n[cyan]🧪 프로필 테스트[/cyan]")
-            name = ask("테스트할 프로필", choices=list(profiles.keys()))
+
+            # 프로필 목록 번호로 표시
+            profile_list = list(profiles.keys())
+            for idx, pname in enumerate(profile_list, 1):
+                p = profiles[pname]
+                console.print(f"  [cyan]{idx}.[/cyan] {pname} ({p['provider']} / {p['model']})")
+
+            choice = ask(f"\n테스트할 프로필 번호 (1-{len(profile_list)})", default="0")
+
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(profile_list):
+                    name = profile_list[idx]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
 
             profile = profiles[name]
             console.print(f"\n[yellow]'{name}' 프로필 테스트 중...[/yellow]")

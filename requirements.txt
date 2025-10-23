@@ -8,6 +8,10 @@ rich>=13.7.0
 click>=8.1.7
 python-dotenv>=1.0.0
 
+# Web Framework (Dashboard API)
+flask>=3.0.0
+flask-cors>=4.0.0
+
 # Multimodal Processing
 pillow>=10.0.0
 opencv-python>=4.8.0
