@@ -191,61 +191,87 @@ class PromptArsenal:
         """실시간으로 사용 가능한 모델 조회"""
         try:
             if provider == "openai":
-                # OpenAI 최신 멀티모달 모델 (2024-2025)
-                return [
-                    # GPT-4o Family (2024-2025) - Omni Models with Vision, Audio
-                    {"id": "gpt-4o", "name": "GPT-4o (Latest)", "capabilities": ["text", "image", "audio"], "context": "128K", "recommended": True},
-                    {"id": "gpt-4o-2024-08-06", "name": "GPT-4o (Aug 2024)", "capabilities": ["text", "image", "audio"], "context": "128K", "recommended": True},
-                    {"id": "gpt-4o-mini", "name": "GPT-4o mini", "capabilities": ["text", "image"], "context": "128K", "recommended": True},
-                    {"id": "gpt-4o-mini-2024-07-18", "name": "GPT-4o mini (Jul 2024)", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
+                # OpenAI API로 실시간 모델 목록 조회
+                import openai
+                client = openai.OpenAI(api_key=api_key, base_url=base_url)
+                models = client.models.list()
 
-                    # GPT-4 Turbo with Vision (2024)
-                    {"id": "gpt-4-turbo", "name": "GPT-4 Turbo (Latest)", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
-                    {"id": "gpt-4-turbo-2024-04-09", "name": "GPT-4 Turbo (Apr 2024)", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
-                    {"id": "gpt-4-vision-preview", "name": "GPT-4 Vision Preview", "capabilities": ["text", "image"], "context": "128K", "recommended": False},
+                # 모델 목록을 정렬 (최신순)
+                model_list = []
+                for m in models.data:
+                    model_id = m.id
+                    # GPT 모델만 필터링
+                    if 'gpt' in model_id.lower():
+                        model_list.append({
+                            "id": model_id,
+                            "name": model_id,
+                            "created": m.created,
+                            "owned_by": getattr(m, 'owned_by', 'openai')
+                        })
 
-                    # GPT-4 (Text-only for comparison)
-                    {"id": "gpt-4", "name": "GPT-4 (Text only)", "capabilities": ["text"], "context": "8K", "recommended": False},
-                    {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo (Text only)", "capabilities": ["text"], "context": "16K", "recommended": False}
-                ]
+                # created 기준 정렬 (최신순)
+                model_list.sort(key=lambda x: x.get('created', 0), reverse=True)
+
+                if not model_list:
+                    raise ValueError("GPT 모델을 찾을 수 없습니다. API 키를 확인하세요.")
+
+                return model_list
 
             elif provider == "anthropic":
                 # Anthropic은 공식 모델 리스트 API가 없음
-                # 하드코딩된 최신 모델 반환 (2025년 기준)
-                return [
-                    # Claude 4 Family (2025) - Latest
-                    {"id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4 (May 2025)", "capabilities": ["text", "vision"], "context": "200K", "recommended": True},
-                    {"id": "claude-opus-4-20250805", "name": "Claude Opus 4.1 (Aug 2025)", "capabilities": ["text", "vision"], "context": "200K", "recommended": True},
-                    {"id": "claude-haiku-4-20251015", "name": "Claude Haiku 4.5 (Oct 2025)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
+                # API 키 검증 후 하드코딩된 최신 모델 반환
+                import anthropic
 
+                # API 키 검증 (간단한 요청으로 확인)
+                client = anthropic.Anthropic(api_key=api_key)
+                # 최소 토큰으로 테스트 요청
+                try:
+                    client.messages.create(
+                        model="claude-3-5-sonnet-20241022",
+                        max_tokens=1,
+                        messages=[{"role": "user", "content": "test"}]
+                    )
+                except anthropic.AuthenticationError:
+                    raise ValueError("Anthropic API 키가 유효하지 않습니다.")
+                except Exception:
+                    # 다른 에러는 무시 (API 키는 유효함)
+                    pass
+
+                # 하드코딩된 최신 모델 목록 반환 (2025년 기준)
+                return [
                     # Claude 3.5 Family (2024)
-                    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet (Oct 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
+                    {"id": "claude-3-5-sonnet-20241022", "name": "Claude 3.5 Sonnet (Oct 2024)"},
+                    {"id": "claude-3-5-sonnet-20240620", "name": "Claude 3.5 Sonnet (Jun 2024)"},
 
                     # Claude 3 Family (2024)
-                    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus (Feb 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
-                    {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet (Feb 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False},
-                    {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku (Mar 2024)", "capabilities": ["text", "vision"], "context": "200K", "recommended": False}
+                    {"id": "claude-3-opus-20240229", "name": "Claude 3 Opus (Feb 2024)"},
+                    {"id": "claude-3-sonnet-20240229", "name": "Claude 3 Sonnet (Feb 2024)"},
+                    {"id": "claude-3-haiku-20240307", "name": "Claude 3 Haiku (Mar 2024)"}
                 ]
 
             elif provider == "google":
-                # Google Gemini 최신 모델 (2024-2025)
-                return [
-                    # Gemini 2.5 Family (2025) - Latest
-                    {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash (Latest)", "capabilities": ["text", "image", "audio", "video"], "context": "1M", "recommended": True},
-                    {"id": "gemini-2.5-flash-lite", "name": "Gemini 2.5 Flash Lite", "capabilities": ["text", "image"], "context": "1M", "recommended": False},
+                # Google Gemini API로 실시간 모델 목록 조회
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
 
-                    # Gemini 2.0 Family (2024-2025)
-                    {"id": "gemini-2.0-flash-exp", "name": "Gemini 2.0 Flash (Experimental)", "capabilities": ["text", "image", "audio", "video"], "context": "1M", "recommended": True},
-                    {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite", "capabilities": ["text", "image"], "context": "1M", "recommended": False},
+                # 사용 가능한 모델 목록 가져오기
+                models = genai.list_models()
+                model_list = []
 
-                    # Gemini 1.5 Family (2024)
-                    {"id": "gemini-1.5-flash-002", "name": "Gemini 1.5 Flash", "capabilities": ["text", "image", "audio", "video"], "context": "1M", "recommended": False},
-                    {"id": "gemini-1.5-pro-002", "name": "Gemini 1.5 Pro", "capabilities": ["text", "image", "audio", "video"], "context": "2M", "recommended": False},
-                    {"id": "gemini-1.5-flash-8b", "name": "Gemini 1.5 Flash 8B", "capabilities": ["text", "image"], "context": "1M", "recommended": False},
+                for m in models:
+                    # generateContent 지원 모델만 필터링
+                    if 'generateContent' in m.supported_generation_methods:
+                        model_list.append({
+                            "id": m.name.replace('models/', ''),  # "models/gemini-pro" -> "gemini-pro"
+                            "name": m.display_name,
+                            "description": m.description[:100] if m.description else "",
+                            "supported_methods": m.supported_generation_methods
+                        })
 
-                    # Image Generation
-                    {"id": "gemini-2.5-flash-image", "name": "Gemini 2.5 Flash Image", "capabilities": ["image-generation"], "context": "N/A", "recommended": False}
-                ]
+                if not model_list:
+                    raise ValueError("Gemini 모델을 찾을 수 없습니다. API 키를 확인하세요.")
+
+                return model_list
 
             elif provider == "xai":
                 # xAI Grok uses OpenAI-compatible API
@@ -3957,7 +3983,13 @@ class PromptArsenal:
 
             if fetch_models and provider != "local":
                 console.print(f"\n[yellow]⏳ {provider} 모델 조회 중...[/yellow]")
-                available_models = self._fetch_available_models(provider, api_key, base_url)
+                try:
+                    available_models = self._fetch_available_models(provider, api_key, base_url)
+                except Exception as e:
+                    console.print(f"\n[red]❌ 모델 조회 실패: {e}[/red]")
+                    console.print(f"[yellow]💡 API 키가 유효하지 않거나 네트워크 오류입니다.[/yellow]")
+                    console.print(f"[yellow]   다시 입력하시거나 API 키를 확인하세요.[/yellow]\n")
+                    return
 
                 if available_models:
                     console.print(f"\n[green]✓ {len(available_models)}개 모델 발견![/green]\n")
@@ -4111,11 +4143,17 @@ class PromptArsenal:
 
                 if fetch_models and current['provider'] != "local":
                     console.print(f"\n[yellow]⏳ {current['provider']} 모델 조회 중...[/yellow]")
-                    available_models = self._fetch_available_models(
-                        current['provider'],
-                        current['api_key'],
-                        current.get('base_url')
-                    )
+                    try:
+                        available_models = self._fetch_available_models(
+                            current['provider'],
+                            current['api_key'],
+                            current.get('base_url')
+                        )
+                    except Exception as e:
+                        console.print(f"\n[red]❌ 모델 조회 실패: {e}[/red]")
+                        console.print(f"[yellow]💡 API 키가 유효하지 않거나 네트워크 오류입니다.[/yellow]")
+                        console.print(f"[yellow]   기존 모델({current['model']})을 유지합니다.[/yellow]\n")
+                        available_models = None
 
                     if available_models:
                         console.print(f"\n[green]✓ {len(available_models)}개 모델 발견![/green]\n")
@@ -4373,7 +4411,13 @@ class PromptArsenal:
 
             if fetch_models:
                 console.print(f"\n[yellow]⏳ {provider} 모델 조회 중...[/yellow]")
-                available_models = self._fetch_available_models(provider, api_key, base_url)
+                try:
+                    available_models = self._fetch_available_models(provider, api_key, base_url)
+                except Exception as e:
+                    console.print(f"\n[red]❌ 모델 조회 실패: {e}[/red]")
+                    console.print(f"[yellow]💡 API 키가 유효하지 않거나 네트워크 오류입니다.[/yellow]")
+                    console.print(f"[yellow]   다시 입력하시거나 API 키를 확인하세요.[/yellow]\n")
+                    return None
 
                 if available_models:
                     console.print(f"\n[green]✓ {len(available_models)}개 모델 발견![/green]\n")
