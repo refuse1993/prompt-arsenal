@@ -2664,7 +2664,7 @@ class PromptArsenal:
         elif media_type == "audio":
             return self._generate_audio_for_test(prompt, attack_type, profile)
         else:  # video
-            return self._generate_video_for_test(prompt, attack_type)
+            return self._generate_video_for_test(prompt, attack_type, profile)
 
     def _generate_image_for_test(self, prompt, attack_type, profile):
         """Generate image for testing"""
@@ -2716,6 +2716,8 @@ class PromptArsenal:
     def _generate_audio_for_test(self, prompt, attack_type, profile):
         """Generate audio for testing"""
         from multimodal.audio_generator import AudioGenerator
+        import os
+        from datetime import datetime
 
         # Check if current profile supports TTS
         if profile['provider'] != 'openai':
@@ -2727,6 +2729,13 @@ class PromptArsenal:
 
         console.print(f"\n[cyan]현재 프로필({profile['provider']})로 TTS 생성 (모델: {tts_model})[/cyan]")
 
+        # Create output directory and file path
+        output_dir = os.path.join(os.getcwd(), 'generated_media', 'audio')
+        os.makedirs(output_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(output_dir, f"audio_{attack_type}_{timestamp}.mp3")
+
         generator = AudioGenerator(
             provider=profile['provider'],
             model=tts_model,
@@ -2734,25 +2743,65 @@ class PromptArsenal:
         )
 
         console.print(f"\n[yellow]🎵 {tts_model}로 오디오 생성 중...[/yellow]")
-        result = asyncio.run(generator.generate_tts(prompt, attack_type))
 
-        if result.get('success'):
-            media_id = self.db.insert_media(
-                media_type='audio',
-                attack_type=attack_type,
-                text_prompt=prompt,
-                generated_file=result['file_path']
-            )
-            console.print(f"[green]✅ 오디오 생성 완료: {result['file_path']}[/green]")
-            return media_id, result['file_path'], attack_type
-        else:
-            console.print(f"[red]오디오 생성 실패: {result.get('error', 'Unknown')}[/red]")
+        try:
+            file_path = asyncio.run(generator.generate(prompt, output_path))
+
+            if file_path:
+                media_id = self.db.insert_media(
+                    media_type='audio',
+                    attack_type=attack_type,
+                    text_prompt=prompt,
+                    generated_file=file_path
+                )
+                console.print(f"[green]✅ 오디오 생성 완료: {file_path}[/green]")
+                return media_id, file_path, attack_type
+            else:
+                console.print(f"[red]오디오 생성 실패[/red]")
+                return None, None, None
+        except Exception as e:
+            console.print(f"[red]오디오 생성 실패: {e}[/red]")
             return None, None, None
 
-    def _generate_video_for_test(self, prompt, attack_type):
+    def _generate_video_for_test(self, prompt, attack_type, profile=None):
         """Generate video for testing"""
-        console.print("[yellow]비디오 생성은 현재 지원하지 않습니다.[/yellow]")
-        return None, None, None
+        from multimodal.video_generator import MockVideoGenerator
+        import os
+        from datetime import datetime
+
+        console.print("[yellow]⚠️  비디오 생성은 현재 제한적으로 지원됩니다.[/yellow]")
+        console.print("[dim]실제 비디오 생성 API (Runway, Pika 등)는 별도의 API 키가 필요합니다.[/dim]")
+        console.print("[dim]플레이스홀더 파일을 생성합니다.[/dim]\n")
+
+        # Create output directory and file path
+        output_dir = os.path.join(os.getcwd(), 'generated_media', 'video')
+        os.makedirs(output_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(output_dir, f"video_{attack_type}_{timestamp}.mp4")
+
+        generator = MockVideoGenerator()
+
+        console.print(f"[yellow]📹 플레이스홀더 비디오 생성 중...[/yellow]")
+
+        try:
+            file_path = asyncio.run(generator.generate(prompt, output_path))
+
+            if file_path:
+                media_id = self.db.insert_media(
+                    media_type='video',
+                    attack_type=attack_type,
+                    text_prompt=prompt,
+                    generated_file=file_path
+                )
+                console.print(f"[green]✅ 플레이스홀더 비디오 생성 완료: {file_path}[/green]")
+                return media_id, file_path, attack_type
+            else:
+                console.print(f"[red]비디오 생성 실패[/red]")
+                return None, None, None
+        except Exception as e:
+            console.print(f"[red]비디오 생성 실패: {e}[/red]")
+            return None, None, None
 
     def _select_media_from_arsenal(self):
         """Select media from arsenal"""
