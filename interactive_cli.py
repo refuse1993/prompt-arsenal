@@ -522,6 +522,7 @@ class PromptArsenal:
 
 [bold magenta]🚩 CTF (자동 풀이)[/bold magenta]
   [green]f[/green]. CTF 문제 추가
+  [green]w[/green]. CTF 대회 크롤링 (자동 수집)
   [green]t[/green]. CTF 자동 풀이 실행
   [green]k[/green]. CTF 문제 목록 및 통계
 
@@ -4278,7 +4279,145 @@ class PromptArsenal:
                 console.print(f"  • {tool_stat['tool']}: {tool_stat['count']}회")
             console.print()
 
-        # List challenges
+        # View mode selection
+        console.print("[yellow]보기 모드:[/yellow]")
+        console.print("  1. 대회/사이트별 그룹")
+        console.print("  2. 전체 목록")
+
+        view_mode = ask("선택 (1-2)", default="1")
+
+        if view_mode == '1':
+            self._ctf_list_by_source()
+        else:
+            self._ctf_list_all()
+
+    def _ctf_list_by_source(self):
+        """List CTF challenges grouped by source/competition"""
+        # Get all sources
+        import sqlite3
+        conn = sqlite3.connect(self.db.db_path)
+        cursor = conn.execute('''
+            SELECT source, COUNT(*) as count,
+                   SUM(CASE WHEN status = 'solved' THEN 1 ELSE 0 END) as solved
+            FROM ctf_challenges
+            WHERE source IS NOT NULL AND source != ''
+            GROUP BY source
+            ORDER BY count DESC
+        ''')
+        sources = cursor.fetchall()
+        conn.close()
+
+        if not sources:
+            console.print("[yellow]대회/사이트가 없습니다.[/yellow]")
+            return
+
+        # Show sources table
+        console.print("\n[bold cyan]📁 대회/사이트 목록[/bold cyan]\n")
+        table = Table()
+        table.add_column("번호", style="magenta", justify="right")
+        table.add_column("대회/사이트명", style="cyan")
+        table.add_column("문제 수", style="green", justify="right")
+        table.add_column("해결", style="yellow", justify="right")
+
+        for idx, (source, count, solved) in enumerate(sources, 1):
+            table.add_row(
+                str(idx),
+                source,
+                f"{count}개",
+                f"{solved}개"
+            )
+
+        console.print(table)
+
+        # Select source
+        console.print("\n[yellow]대회/사이트를 선택하세요 (0: 전체 목록으로 전환)[/yellow]")
+        choice = ask(f"선택 (0-{len(sources)})", default="1")
+
+        if choice == '0':
+            self._ctf_list_all()
+            return
+
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(sources):
+                selected_source = sources[idx][0]
+                self._ctf_list_challenges_by_source(selected_source)
+            else:
+                console.print("[red]잘못된 선택입니다.[/red]")
+        except ValueError:
+            console.print("[red]숫자를 입력하세요.[/red]")
+
+    def _ctf_list_challenges_by_source(self, source):
+        """List challenges from a specific source"""
+        console.print(f"\n[bold cyan]🏆 {source}[/bold cyan]\n")
+
+        # Get challenges from this source
+        import sqlite3
+        conn = sqlite3.connect(self.db.db_path)
+        cursor = conn.execute('''
+            SELECT * FROM ctf_challenges
+            WHERE source = ?
+            ORDER BY id DESC
+        ''', (source,))
+
+        columns = [desc[0] for desc in cursor.description]
+        challenges = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        conn.close()
+
+        if not challenges:
+            console.print("[yellow]문제가 없습니다.[/yellow]")
+            return
+
+        # Show challenges table
+        table = Table(title=f"{source} - {len(challenges)}개 문제")
+        table.add_column("번호", style="magenta", justify="right")
+        table.add_column("제목", style="cyan")
+        table.add_column("카테고리", style="green")
+        table.add_column("난이도", style="yellow")
+        table.add_column("상태", style="white")
+
+        for idx, challenge in enumerate(challenges, 1):
+            status_emoji = {'pending': '⏳', 'solved': '✅', 'failed': '❌'}.get(challenge['status'], '❓')
+
+            table.add_row(
+                str(idx),
+                challenge['title'][:50],
+                challenge['category'].upper() if challenge['category'] else '',
+                challenge['difficulty'] or '',
+                f"{status_emoji} {challenge['status']}"
+            )
+
+        console.print(table)
+
+        # Actions
+        console.print("\n[yellow]작업 선택:[/yellow]")
+        console.print("  [green]번호[/green]: 문제 상세보기")
+        console.print("  [green]d[/green]: 이 대회의 모든 문제 삭제")
+        console.print("  [green]q[/green]: 돌아가기")
+
+        action = ask("선택", default="q")
+
+        if action == 'd':
+            if confirm(f"{source}의 모든 문제를 삭제하시겠습니까?"):
+                for challenge in challenges:
+                    self.db.delete_ctf_challenge(challenge['id'])
+                console.print(f"[green]✅ {len(challenges)}개 문제 삭제 완료[/green]")
+        elif action == 'q':
+            return
+        else:
+            try:
+                idx = int(action) - 1
+                if 0 <= idx < len(challenges):
+                    self._ctf_show_detail(challenges[idx])
+                    # 상세보기 후 다시 목록 표시
+                    self._ctf_list_challenges_by_source(source)
+                else:
+                    console.print("[red]잘못된 번호입니다.[/red]")
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+
+    def _ctf_list_all(self):
+        """List all CTF challenges"""
         console.print("\n[yellow]필터:[/yellow]")
         console.print("  1. 전체")
         console.print("  2. 미해결")
@@ -4289,7 +4428,7 @@ class PromptArsenal:
         status_map = {'1': None, '2': 'pending', '3': 'solved'}
         status_filter = status_map.get(filter_choice)
 
-        challenges = self.db.get_ctf_challenges(status=status_filter, limit=50)
+        challenges = self.db.get_ctf_challenges(status=status_filter, limit=100)
 
         if not challenges:
             console.print("[yellow]문제가 없습니다.[/yellow]")
@@ -4297,33 +4436,211 @@ class PromptArsenal:
 
         # Show challenges table
         table = Table(title=f"CTF 문제 목록 ({len(challenges)}개)")
-        table.add_column("ID", style="magenta", justify="right")
+        table.add_column("번호", style="magenta", justify="right")
         table.add_column("제목", style="cyan")
         table.add_column("카테고리", style="green")
         table.add_column("난이도", style="yellow")
         table.add_column("상태", style="white")
-        table.add_column("생성일", style="dim")
+        table.add_column("대회/사이트", style="dim")
 
-        for challenge in challenges:
+        for idx, challenge in enumerate(challenges, 1):
             status_emoji = {'pending': '⏳', 'solved': '✅', 'failed': '❌'}.get(challenge['status'], '❓')
 
             table.add_row(
-                str(challenge['id']),
+                str(idx),
                 challenge['title'][:40],
-                challenge['category'].upper(),
-                challenge['difficulty'],
+                challenge['category'].upper() if challenge['category'] else '',
+                challenge['difficulty'] or '',
                 f"{status_emoji} {challenge['status']}",
-                challenge['created_at'][:10]
+                (challenge.get('source') or 'Unknown')[:20]
             )
 
         console.print(table)
 
-        # Ask if user wants to delete challenges
-        console.print("\n[yellow]문제 삭제를 원하시나요?[/yellow]")
-        delete_choice = ask("삭제하시겠습니까? (y/n)", default="n").lower()
+        # Actions
+        console.print("\n[yellow]작업 선택:[/yellow]")
+        console.print("  [green]번호[/green]: 문제 상세보기")
+        console.print("  [green]d[/green]: 전체 삭제")
+        console.print("  [green]q[/green]: 돌아가기")
 
-        if delete_choice == 'y':
-            self.ctf_delete_challenges(challenges)
+        action = ask("선택", default="q")
+
+        if action == 'd':
+            if confirm("모든 문제를 삭제하시겠습니까?"):
+                self.ctf_delete_challenges(challenges)
+        elif action == 'q':
+            return
+        else:
+            try:
+                idx = int(action) - 1
+                if 0 <= idx < len(challenges):
+                    self._ctf_show_detail(challenges[idx])
+                    # 상세보기 후 다시 목록 표시
+                    self._ctf_list_all()
+                else:
+                    console.print("[red]잘못된 번호입니다.[/red]")
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+
+    def _ctf_show_detail(self, challenge):
+        """Show detailed information about a CTF challenge"""
+        console.print(f"\n[bold cyan]{'='*70}[/bold cyan]")
+        console.print(f"[bold magenta]📝 문제 상세정보[/bold magenta]")
+        console.print(f"[bold cyan]{'='*70}[/bold cyan]\n")
+
+        # Basic info
+        console.print(f"[bold]ID:[/bold] {challenge['id']}")
+        console.print(f"[bold]제목:[/bold] {challenge['title']}")
+        console.print(f"[bold]카테고리:[/bold] {challenge['category'].upper()}")
+        console.print(f"[bold]난이도:[/bold] {challenge['difficulty'] or 'N/A'}")
+        console.print(f"[bold]상태:[/bold] {challenge['status']}")
+        console.print(f"[bold]대회/사이트:[/bold] {challenge.get('source') or 'Unknown'}")
+
+        # URL
+        if challenge.get('url'):
+            console.print(f"[bold]URL:[/bold] {challenge['url']}")
+
+        # Description
+        if challenge.get('description'):
+            console.print(f"\n[bold yellow]📄 설명:[/bold yellow]")
+
+            # LLM 분석이 포함되어 있는지 확인
+            if '🤖 LLM 분석' in challenge['description']:
+                # LLM 분석 전/후 분리
+                parts = challenge['description'].split('='*50)
+
+                # 원본 설명
+                original_desc = parts[0].strip()
+                console.print(original_desc)
+
+                # LLM 분석
+                if len(parts) >= 3:
+                    llm_analysis = parts[2].strip()
+                    console.print(f"\n[bold cyan]{'='*70}[/bold cyan]")
+                    console.print(f"[bold green]🤖 LLM 분석[/bold green]")
+                    console.print(f"[bold cyan]{'='*70}[/bold cyan]\n")
+                    console.print(llm_analysis)
+            else:
+                # LLM 분석이 없으면 기존 방식
+                console.print(challenge['description'][:500])
+                if len(challenge['description']) > 500:
+                    console.print("[dim]... (500자로 잘림, LLM 분석 크롤링 권장)[/dim]")
+
+        # Hints
+        if challenge.get('hints'):
+            import json
+            try:
+                hints = json.loads(challenge['hints'])
+                if hints:
+                    console.print(f"\n[bold yellow]💡 힌트:[/bold yellow]")
+                    for idx, hint in enumerate(hints, 1):
+                        console.print(f"  {idx}. {hint}")
+            except:
+                pass
+
+        # Additional fields
+        if challenge.get('file_path'):
+            console.print(f"\n[bold]📁 파일:[/bold] {challenge['file_path']}")
+        if challenge.get('host'):
+            console.print(f"[bold]🌐 호스트:[/bold] {challenge['host']}:{challenge.get('port', 'N/A')}")
+
+        console.print(f"\n[bold cyan]{'='*70}[/bold cyan]\n")
+
+        # Actions
+        console.print("[yellow]작업:[/yellow]")
+        console.print("  [green]d[/green]: 이 문제 삭제")
+        console.print("  [green]Enter[/green]: 돌아가기")
+
+        action = ask("선택", default="").lower()
+
+        if action == 'd':
+            if confirm("이 문제를 삭제하시겠습니까?"):
+                self.db.delete_ctf_challenge(challenge['id'])
+                console.print("[green]✅ 문제 삭제 완료[/green]")
+
+    async def ctf_crawl_competition(self):
+        """Crawl CTF competition and automatically collect challenges"""
+        from ctf.competition_crawler import CompetitionCrawler
+        from rich.prompt import Prompt, Confirm
+
+        console.print("\n[bold magenta]🔍 CTF 대회 크롤링[/bold magenta]\n")
+        console.print("[dim]대회 메인 페이지에서 모든 챌린지를 자동으로 수집합니다[/dim]\n")
+
+        # Get competition URL
+        url = Prompt.ask("대회 메인 페이지 URL을 입력하세요")
+
+        if not url.startswith('http'):
+            console.print("[red]❌ 올바른 URL을 입력하세요 (http:// 또는 https://)[/red]")
+            return
+
+        # LLM 프로필 선택 (페이지 판단용)
+        console.print("\n[cyan]💡 LLM을 사용하여 페이지 타입을 자동 판단합니다[/cyan]")
+        console.print("[dim]잘못된 URL을 입력해도 LLM이 감지하고 올바른 페이지를 찾아줍니다[/dim]\n")
+
+        llm_profile_name = None
+        if Confirm.ask("LLM 페이지 판단을 사용하시겠습니까?", default=True):
+            # LLM 프로필 선택
+            from core import get_profile_manager
+            pm = get_profile_manager()
+            llm_profiles = pm.list_llm_profiles()
+
+            if not llm_profiles:
+                console.print("[yellow]⚠️  설정된 LLM 프로필이 없습니다[/yellow]")
+                console.print("[dim]메뉴 's'에서 API 프로필을 먼저 설정해주세요[/dim]")
+                if not Confirm.ask("LLM 없이 계속하시겠습니까?"):
+                    return
+            else:
+                console.print("\n[yellow]LLM 프로필 선택:[/yellow]")
+                profile_list = list(llm_profiles.items())
+
+                for i, (name, profile) in enumerate(profile_list, 1):
+                    default_marker = "★" if pm.default_profile == name else " "
+                    console.print(f"  [green]{i}[/green]. {default_marker} {name} ({profile['provider']}/{profile['model']})")
+
+                choice = ask(f"선택 (1-{len(profile_list)})", default="1")
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(profile_list):
+                        llm_profile_name = profile_list[idx][0]
+                        console.print(f"[green]✓ {llm_profile_name} 프로필 선택됨[/green]")
+                    else:
+                        console.print("[yellow]잘못된 선택입니다. 기본 프로필을 사용합니다[/yellow]")
+                except:
+                    console.print("[yellow]잘못된 입력입니다. 기본 프로필을 사용합니다[/yellow]")
+
+        # Ask for max challenges limit
+        console.print("\n[yellow]수집 개수 제한 설정:[/yellow]")
+        console.print("[dim]연습 사이트는 수백 개의 문제가 있을 수 있습니다[/dim]")
+
+        max_challenges = None
+        if Confirm.ask("수집 개수를 제한하시겠습니까?", default=False):
+            limit_str = Prompt.ask("최대 수집 개수를 입력하세요 (예: 10, 20, 50)", default="20")
+            try:
+                max_challenges = int(limit_str)
+                console.print(f"[green]✓ 최대 {max_challenges}개까지 수집합니다[/green]")
+            except ValueError:
+                console.print("[yellow]잘못된 입력입니다. 제한 없이 전체 수집합니다[/yellow]")
+
+        # Create crawler and run
+        crawler = CompetitionCrawler(self.db, llm_profile_name=llm_profile_name)
+        stats = await crawler.crawl_competition(url, max_challenges=max_challenges)
+
+        # Show final summary
+        if 'error' not in stats:
+            console.print("\n[bold green]✅ 크롤링 완료![/bold green]")
+            console.print(f"  • 발견된 링크: {stats['links_discovered']}개")
+            console.print(f"  • 건너뛴 링크: {stats.get('links_skipped', 0)}개 (비챌린지 페이지)")
+            console.print(f"  • 분석된 챌린지: {stats['challenges_found']}개")
+            console.print(f"  • DB 저장: {stats['challenges_saved']}개")
+
+            if max_challenges and stats['challenges_saved'] >= max_challenges:
+                console.print(f"\n[yellow]⚠️  최대 개수({max_challenges}개) 제한으로 크롤링을 중단했습니다[/yellow]")
+
+            if stats['challenges_saved'] > 0:
+                console.print(f"\n[cyan]💡 '{stats['competition']}'의 챌린지들이 DB에 저장되었습니다[/cyan]")
+                console.print("[dim]메뉴 'k'에서 확인하거나 't'로 자동 풀이를 시작할 수 있습니다[/dim]")
+        else:
+            console.print(f"\n[red]❌ 오류: {stats['error']}[/red]")
 
     def ctf_delete_challenges(self, challenges: List[Dict] = None):
         """Delete CTF challenges with confirmation"""
@@ -5766,6 +6083,8 @@ class PromptArsenal:
                     self.security_system_scan_history()
                 elif choice == 'f':
                     self.ctf_add_challenge()
+                elif choice == 'w':
+                    asyncio.run(self.ctf_crawl_competition())
                 elif choice == 't':
                     asyncio.run(self.ctf_auto_solve())
                 elif choice == 'k':

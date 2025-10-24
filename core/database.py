@@ -7,12 +7,18 @@ import sqlite3
 from typing import List, Dict, Optional
 from datetime import datetime
 import json
+import os
+from pathlib import Path
 
 
 class ArsenalDB:
     """Unified database for Prompt Arsenal"""
 
-    def __init__(self, db_path: str = "arsenal.db"):
+    def __init__(self, db_path: str = None):
+        # Use absolute path to project root's arsenal.db
+        if db_path is None:
+            project_root = Path(__file__).parent.parent
+            db_path = str(project_root / "arsenal.db")
         self.db_path = db_path
         self.init_database()
 
@@ -1589,7 +1595,7 @@ class ArsenalDB:
         return None
 
     def get_ctf_challenges(self, category: Optional[str] = None,
-                          status: Optional[str] = None, limit: int = 50) -> List[Dict]:
+                          status: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict]:
         """Get CTF challenges with filters"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -1606,8 +1612,9 @@ class ArsenalDB:
             query += ' AND status = ?'
             params.append(status)
 
-        query += ' ORDER BY created_at DESC LIMIT ?'
+        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
         params.append(limit)
+        params.append(offset)
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -1831,3 +1838,622 @@ class ArsenalDB:
             'failed': failed,
             'total_requested': len(challenge_ids)
         }
+
+    # === Additional Methods for Dashboard API ===
+
+    def get_prompt_count(self, category: Optional[str] = None) -> int:
+        """Get total prompt count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        if category:
+            cursor.execute('SELECT COUNT(*) FROM prompts WHERE category = ?', (category,))
+        else:
+            cursor.execute('SELECT COUNT(*) FROM prompts')
+
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_prompt_categories(self) -> List[Dict]:
+        """Get all prompt categories with counts"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT category, COUNT(*) as count
+            FROM prompts
+            GROUP BY category
+            ORDER BY count DESC
+        ''')
+
+        categories = [{'name': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return categories
+
+    def get_media_count(self, media_type: Optional[str] = None, attack_type: Optional[str] = None) -> int:
+        """Get total media count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        query = 'SELECT COUNT(*) FROM media_arsenal WHERE 1=1'
+        params = []
+
+        if media_type:
+            query += ' AND media_type = ?'
+            params.append(media_type)
+
+        if attack_type:
+            query += ' AND attack_type = ?'
+            params.append(attack_type)
+
+        cursor.execute(query, params)
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_media_types(self) -> List[Dict]:
+        """Get media types with counts"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT media_type, COUNT(*) as count
+            FROM media_arsenal
+            GROUP BY media_type
+        ''')
+
+        types = [{'media_type': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return types
+
+    def get_attack_types(self) -> List[Dict]:
+        """Get attack types with counts"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT attack_type, COUNT(*) as count
+            FROM media_arsenal
+            GROUP BY attack_type
+        ''')
+
+        types = [{'attack_type': row[0], 'count': row[1]} for row in cursor.fetchall()]
+        conn.close()
+        return types
+
+    def get_ctf_challenge_count(self, category: Optional[str] = None) -> int:
+        """Get CTF challenge count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        if category:
+            cursor.execute('SELECT COUNT(*) FROM ctf_challenges WHERE category = ?', (category,))
+        else:
+            cursor.execute('SELECT COUNT(*) FROM ctf_challenges')
+
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_ctf_test_count(self) -> int:
+        """Get CTF test count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM ctf_execution_logs')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_ctf_avg_success_rate(self) -> float:
+        """Get CTF average success rate"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT AVG(success) FROM ctf_execution_logs')
+        result = cursor.fetchone()[0]
+        conn.close()
+        return result or 0.0
+
+    def get_security_scan_count(self) -> int:
+        """Get security scan count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM security_scans')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_vulnerability_count(self, severity: str) -> int:
+        """Get vulnerability count by severity"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM security_findings WHERE severity = ?', (severity,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_system_scan_count(self) -> int:
+        """Get system scan count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM system_scans')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_host_count(self) -> int:
+        """Get scanned host count"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(DISTINCT target) FROM system_scans')
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_port_count(self) -> int:
+        """Get open port count - returns 0 as system_scans doesn't have port details"""
+        return 0
+
+    def get_cve_count(self, severity: str) -> int:
+        """Get CVE count by severity from security_findings"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM security_findings WHERE severity = ?', (severity,))
+        count = cursor.fetchone()[0]
+        conn.close()
+        return count
+
+    def get_recent_test_results(self, limit: int = 20) -> List[Dict]:
+        """Get recent test results"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT r.*, p.category
+            FROM test_results r
+            LEFT JOIN prompts p ON r.prompt_id = p.id
+            ORDER BY r.tested_at DESC
+            LIMIT ?
+        ''', (limit,))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def get_recent_multimodal_tests(self, limit: int = 20) -> List[Dict]:
+        """Get recent multimodal test results"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT r.*, m.media_type, m.attack_type
+            FROM multimodal_test_results r
+            LEFT JOIN media_arsenal m ON r.media_id = m.id
+            ORDER BY r.tested_at DESC
+            LIMIT ?
+        ''', (limit,))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def get_success_rates_by_category(self) -> List[Dict]:
+        """Get success rates by category"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT p.category,
+                   COUNT(*) as total_tests,
+                   SUM(CASE WHEN r.success = 1 THEN 1 ELSE 0 END) as successful_tests,
+                   ROUND(AVG(CASE WHEN r.success = 1 THEN 100.0 ELSE 0.0 END), 2) as success_rate
+            FROM test_results r
+            JOIN prompts p ON r.prompt_id = p.id
+            GROUP BY p.category
+        ''')
+
+        rates = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rates
+
+    def get_multimodal_success_rates(self) -> List[Dict]:
+        """Get multimodal success rates"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT m.attack_type,
+                   COUNT(*) as total_tests,
+                   SUM(CASE WHEN r.success = 1 THEN 1 ELSE 0 END) as successful_tests,
+                   ROUND(AVG(CASE WHEN r.success = 1 THEN 100.0 ELSE 0.0 END), 2) as success_rate
+            FROM multimodal_test_results r
+            JOIN media_arsenal m ON r.media_id = m.id
+            GROUP BY m.attack_type
+        ''')
+
+        rates = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rates
+
+    def get_ctf_success_rates(self) -> List[Dict]:
+        """Get CTF success rates by category"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT category,
+                   COUNT(*) as total_challenges,
+                   SUM(CASE WHEN status = "solved" THEN 1 ELSE 0 END) as solved_challenges,
+                   ROUND(AVG(CASE WHEN status = "solved" THEN 100.0 ELSE 0.0 END), 2) as success_rate
+            FROM ctf_challenges
+            GROUP BY category
+        ''')
+
+        rates = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return rates
+
+    def get_activity_timeline(self, days: int = 30) -> List[Dict]:
+        """Get activity timeline for last N days"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT DATE(tested_at) as date,
+                   COUNT(*) as total_tests,
+                   SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_tests
+            FROM test_results
+            WHERE tested_at >= datetime('now', '-' || ? || ' days')
+            GROUP BY DATE(tested_at)
+            ORDER BY date DESC
+        ''', (days,))
+
+        timeline = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return timeline
+
+    def get_all_prompts(self, category: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict]:
+        """Get all prompts with pagination"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if category:
+            cursor.execute('''
+                SELECT * FROM prompts
+                WHERE category = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            ''', (category, limit, offset))
+        else:
+            cursor.execute('''
+                SELECT * FROM prompts
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+
+        prompts = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return prompts
+
+    def get_all_media(self, media_type: Optional[str] = None, attack_type: Optional[str] = None,
+                     limit: int = 50, offset: int = 0) -> List[Dict]:
+        """Get all media with pagination"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        query = 'SELECT * FROM media_arsenal WHERE 1=1'
+        params = []
+
+        if media_type:
+            query += ' AND media_type = ?'
+            params.append(media_type)
+
+        if attack_type:
+            query += ' AND attack_type = ?'
+            params.append(attack_type)
+
+        query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?'
+        params.append(limit)
+        params.append(offset)
+
+        cursor.execute(query, params)
+        media = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return media
+
+    def get_media_by_id(self, media_id: int) -> Optional[Dict]:
+        """Get media by ID"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM media_arsenal WHERE id = ?', (media_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            media = dict(row)
+            if media.get('parameters'):
+                media['parameters'] = json.loads(media['parameters'])
+            return media
+        return None
+
+    def delete_media(self, media_id: int) -> bool:
+        """Delete media by ID"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('DELETE FROM media_arsenal WHERE id = ?', (media_id,))
+        deleted = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+        return deleted
+
+    def get_campaign_by_id(self, campaign_id: int) -> Optional[Dict]:
+        """Get campaign by ID"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM multi_turn_campaigns WHERE id = ?', (campaign_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        return dict(row) if row else None
+
+    def get_campaign_steps(self, campaign_id: int) -> List[Dict]:
+        """Get campaign steps"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM campaign_turns
+            WHERE campaign_id = ?
+            ORDER BY turn_number
+        ''', (campaign_id,))
+
+        steps = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return steps
+
+    def get_multiturn_test_results(self) -> List[Dict]:
+        """Get multi-turn test results"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT r.*, c.name as campaign_name, c.strategy
+            FROM multi_turn_evaluations r
+            LEFT JOIN multi_turn_campaigns c ON r.campaign_id = c.id
+            ORDER BY r.evaluated_at DESC
+            LIMIT 100
+        ''')
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def get_security_scan_results(self, limit: int = 50, offset: int = 0) -> List[Dict]:
+        """Get security scan results with pagination"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM security_scans
+            ORDER BY started_at DESC
+            LIMIT ? OFFSET ?
+        ''', (limit, offset))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def get_vulnerabilities(self, severity: Optional[str] = None) -> List[Dict]:
+        """Get vulnerabilities"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if severity:
+            cursor.execute('''
+                SELECT * FROM security_findings
+                WHERE severity = ?
+                ORDER BY severity DESC, id DESC
+                LIMIT 100
+            ''', (severity,))
+        else:
+            cursor.execute('''
+                SELECT * FROM security_findings
+                ORDER BY severity DESC, id DESC
+                LIMIT 100
+            ''')
+
+        vulnerabilities = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return vulnerabilities
+
+    def get_system_scan_results(self, limit: int = 50, offset: int = 0) -> List[Dict]:
+        """Get system scan results with pagination"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM system_scans
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ''', (limit, offset))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def get_scanned_hosts(self) -> List[Dict]:
+        """Get scanned hosts"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT target as ip,
+                   target as hostname,
+                   0 as open_ports
+            FROM system_scans
+            GROUP BY target
+            LIMIT 20
+        ''')
+
+        hosts = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return hosts
+
+    def get_open_ports(self, host: Optional[str] = None) -> List[Dict]:
+        """Get open ports - returns empty list as system_scans doesn't have port details"""
+        return []
+
+    def get_detected_cves(self, severity: Optional[str] = None) -> List[Dict]:
+        """Get detected CVEs from security_findings"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if severity:
+            cursor.execute('''
+                SELECT cwe_id as cve_id, severity, confidence as score,
+                       description, file_path as affected_service,
+                       title, remediation as mitigation
+                FROM security_findings
+                WHERE severity = ?
+                ORDER BY confidence DESC
+                LIMIT 50
+            ''', (severity,))
+        else:
+            cursor.execute('''
+                SELECT cwe_id as cve_id, severity, confidence as score,
+                       description, file_path as affected_service,
+                       title, remediation as mitigation
+                FROM security_findings
+                ORDER BY confidence DESC
+                LIMIT 50
+            ''')
+
+        cves = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return cves
+
+    def get_ctf_test_results(self, challenge_id: Optional[int] = None) -> List[Dict]:
+        """Get CTF test results"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if challenge_id:
+            cursor.execute('''
+                SELECT * FROM ctf_execution_logs
+                WHERE challenge_id = ?
+                ORDER BY started_at DESC
+                LIMIT 50
+            ''', (challenge_id,))
+        else:
+            cursor.execute('''
+                SELECT * FROM ctf_execution_logs
+                ORDER BY started_at DESC
+                LIMIT 50
+            ''')
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def get_all_ctf_test_results(self) -> List[Dict]:
+        """Get all CTF test results"""
+        return self.get_ctf_test_results()
+
+    def get_multimodal_test_results(self, media_id: int) -> List[Dict]:
+        """Get multimodal test results for a media"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM multimodal_test_results
+            WHERE media_id = ?
+            ORDER BY tested_at DESC
+        ''', (media_id,))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def get_cross_modal_combinations(self) -> List[Dict]:
+        """Get cross-modal combinations"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM cross_modal_combinations
+            ORDER BY created_at DESC
+            LIMIT 50
+        ''')
+
+        combinations = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return combinations
+
+    def get_ctf_challenge_by_id(self, challenge_id: int) -> Optional[Dict]:
+        """Get CTF challenge by ID"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM ctf_challenges WHERE id = ?', (challenge_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            challenge = dict(row)
+            if challenge.get('hints'):
+                challenge['hints'] = json.loads(challenge['hints'])
+            return challenge
+        return None
+
+    def get_test_results_by_prompt(self, prompt_id: int) -> List[Dict]:
+        """Get test results for a prompt"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM test_results
+            WHERE prompt_id = ?
+            ORDER BY tested_at DESC
+        ''', (prompt_id,))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return results
+
+    def delete_prompt(self, prompt_id: int) -> bool:
+        """Delete prompt by ID"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('DELETE FROM prompts WHERE id = ?', (prompt_id,))
+        deleted = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+        return deleted
