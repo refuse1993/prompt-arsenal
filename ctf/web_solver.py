@@ -392,34 +392,47 @@ class WebSolver:
 
     # === Helper Methods ===
 
-    async def _test_payload(self, url: str, payload: str, param: str = 'id') -> Dict:
+    async def _test_payload(self, url: str, payload: str, param: str = 'id', method: str = 'GET') -> Dict:
         """
-        페이로드 테스트 (실제 구현에서는 requests 사용)
+        페이로드 테스트 (실제 HTTP 요청)
 
         Args:
             url: 대상 URL
             payload: 테스트 페이로드
             param: 파라미터 이름
+            method: HTTP 메서드 (GET/POST)
 
         Returns:
-            {'success': bool, 'response': str}
+            {'success': bool, 'response': str, 'status_code': int}
         """
-        # 실제 구현 예시:
-        # import requests
-        # try:
-        #     response = requests.get(url, params={param: payload}, timeout=5)
-        #     return {
-        #         'success': response.status_code == 200,
-        #         'response': response.text
-        #     }
-        # except:
-        #     return {'success': False, 'response': ''}
+        try:
+            import httpx
 
-        # 현재는 더미 구현
-        return {
-            'success': False,
-            'response': ''
-        }
+            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+                if method.upper() == 'GET':
+                    response = await client.get(url, params={param: payload})
+                elif method.upper() == 'POST':
+                    response = await client.post(url, data={param: payload})
+                else:
+                    return {
+                        'success': False,
+                        'response': '',
+                        'status_code': 0
+                    }
+
+                return {
+                    'success': response.status_code == 200,
+                    'response': response.text,
+                    'status_code': response.status_code
+                }
+
+        except Exception as e:
+            print(f"  ⚠️  HTTP 요청 실패: {e}")
+            return {
+                'success': False,
+                'response': '',
+                'status_code': 0
+            }
 
     def _extract_flag(self, text: str) -> Optional[str]:
         """텍스트에서 플래그 추출"""

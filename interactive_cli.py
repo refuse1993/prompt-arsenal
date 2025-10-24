@@ -13,6 +13,7 @@ import asyncio
 import os
 import sys
 import readline  # 한글 입력 개선
+from typing import List, Dict, Optional
 
 # 터미널 인코딩 설정 (한글 입력 지원)
 if hasattr(sys.stdin, 'reconfigure'):
@@ -102,11 +103,6 @@ class PromptArsenal:
         self._image_attack = None
         self._audio_attack = None
         self._video_attack = None
-        self._foolbox = None
-        self._cleverhans = None
-        self._advertorch = None
-        self._advbench = None
-        self._mm_safety = None
 
     def load_sample_paths(self):
         """Load default sample file paths"""
@@ -467,44 +463,6 @@ class PromptArsenal:
             from multimodal.video_adversarial import VideoAdversarial
             self._video_attack = VideoAdversarial()
         return self._video_attack
-
-    @property
-    def foolbox(self):
-        if self._foolbox is None:
-            try:
-                from academic.adversarial.foolbox_attacks import FoolboxAttack
-                self._foolbox = FoolboxAttack()
-            except ImportError:
-                return None
-        return self._foolbox
-
-    @property
-    def cleverhans(self):
-        if self._cleverhans is None:
-            from academic.adversarial.cleverhans_attacks import CleverHansAttack
-            self._cleverhans = CleverHansAttack()
-        return self._cleverhans
-
-    @property
-    def advertorch(self):
-        if self._advertorch is None:
-            from academic.adversarial.advertorch_attacks import AdvertorchAttack
-            self._advertorch = AdvertorchAttack()
-        return self._advertorch
-
-    @property
-    def advbench(self):
-        if self._advbench is None:
-            from benchmarks.advbench import AdvBenchImporter
-            self._advbench = AdvBenchImporter(self.db)
-        return self._advbench
-
-    @property
-    def mm_safety(self):
-        if self._mm_safety is None:
-            from benchmarks.mm_safetybench import MMSafetyBench
-            self._mm_safety = MMSafetyBench(self.db)
-        return self._mm_safety
 
     def show_banner(self):
         """Display application banner"""
@@ -3657,322 +3615,6 @@ class PromptArsenal:
 
     # === ADVANCED ATTACKS ===
 
-    def advanced_foolbox_attack(self):
-        """Foolbox advanced image attacks"""
-        if self.foolbox is None:
-            console.print("[red]Foolbox is not available. Install with: uv pip install foolbox[/red]")
-            return
-
-        console.print("\n[bold yellow]Foolbox 고급 이미지 공격[/bold yellow]")
-
-        # Show sample path hint
-        default_image = self.default_paths["image"]
-        console.print(f"[dim]💡 샘플 사용: Enter 키만 누르면 기본 샘플 이미지 사용[/dim]")
-        console.print(f"[dim]   디폴트: {default_image}[/dim]\n")
-
-        image_path = ask("이미지 파일 경로", default=default_image)
-
-        if not os.path.exists(image_path):
-            console.print(f"[red]파일을 찾을 수 없습니다: {image_path}[/red]")
-            console.print(f"[yellow]샘플 파일 생성: python3 create_samples.py[/yellow]")
-            return
-
-        attack_types = self.foolbox.get_attack_types()
-        table = Table(title="Available Attacks")
-        table.add_column("Attack", style="cyan")
-        for at in attack_types:
-            table.add_row(at)
-        console.print(table)
-
-        attack_type = ask("공격 유형", choices=attack_types, default="fgsm")
-
-        try:
-            with console.status(f"[cyan]Generating {attack_type} attack...", spinner="dots"):
-                if attack_type == 'fgsm':
-                    adv_img = self.foolbox.fgsm_attack(image_path)
-                elif attack_type == 'pgd':
-                    adv_img = self.foolbox.pgd_attack(image_path)
-                elif attack_type == 'cw':
-                    adv_img = self.foolbox.cw_attack(image_path)
-                elif attack_type == 'deepfool':
-                    adv_img = self.foolbox.deepfool_attack(image_path)
-                elif attack_type == 'gaussian_noise':
-                    adv_img = self.foolbox.gaussian_noise_attack(image_path)
-                elif attack_type == 'salt_pepper':
-                    adv_img = self.foolbox.salt_pepper_attack(image_path)
-                else:
-                    console.print("[red]Unknown attack type[/red]")
-                    return
-
-            output_path = f"media/foolbox_{attack_type}.png"
-            os.makedirs("media", exist_ok=True)
-            adv_img.save(output_path)
-
-            console.print(f"[green]✓[/green] Adversarial image saved: {output_path}")
-
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-
-    def advanced_cleverhans_attack(self):
-        """CleverHans text/audio attacks"""
-        console.print("\n[bold yellow]CleverHans 공격[/bold yellow]")
-
-        modality = ask("Modality (text/audio)", choices=["text", "audio"], default="text")
-
-        if modality == "text":
-            console.print(f"[dim]💡 샘플 프롬프트: {self.sample_prompts['jailbreak'][:50]}...[/dim]\n")
-            text = ask("Original text", default=self.sample_prompts['jailbreak'])
-            attack_types = self.cleverhans.get_text_attack_types()
-
-            table = Table(title="Available Text Attacks")
-            table.add_column("Attack", style="cyan")
-            for at in attack_types:
-                table.add_row(at)
-            console.print(table)
-
-            attack_type = ask("Attack type", choices=attack_types, default="word_sub")
-
-            if attack_type == "word_sub":
-                adversarial = self.cleverhans.word_substitution_attack(text)
-            elif attack_type == "token_insert":
-                adversarial = self.cleverhans.token_insertion_attack(text)
-            else:
-                adversarial = self.cleverhans._character_level_perturbation(text, 0.1)
-
-            console.print(f"\n[green]Original:[/green] {text}")
-            console.print(f"[red]Adversarial:[/red] {adversarial}")
-
-        elif modality == "audio":
-            default_audio = self.default_paths["audio"]
-            console.print(f"[dim]💡 샘플 사용: Enter 키만 누르면 기본 샘플 오디오 사용[/dim]")
-            console.print(f"[dim]   디폴트: {default_audio}[/dim]\n")
-
-            audio_path = ask("Audio file path", default=default_audio)
-            if not os.path.exists(audio_path):
-                console.print(f"[red]File not found: {audio_path}[/red]")
-                console.print(f"[yellow]샘플 파일 생성: python3 create_samples.py[/yellow]")
-                return
-
-            attack_types = self.cleverhans.get_audio_attack_types()
-            console.print(f"[cyan]Available: {', '.join(attack_types)}[/cyan]")
-
-            attack_type = ask("Attack type", choices=attack_types, default="fgsm")
-
-            import librosa
-            import soundfile as sf
-
-            audio, sr = librosa.load(audio_path, sr=16000)
-
-            if attack_type == "fgsm":
-                adv_audio, sr = self.cleverhans.audio_fgsm_attack(audio, sr)
-            elif attack_type == "pgd":
-                adv_audio, sr = self.cleverhans.audio_pgd_attack(audio, sr)
-            elif attack_type == "spectral":
-                adv_audio, sr = self.cleverhans.spectral_attack(audio, sr)
-            else:
-                adv_audio, sr = self.cleverhans.temporal_segmentation_attack(audio, sr)
-
-            output_path = f"media/cleverhans_{attack_type}.wav"
-            os.makedirs("media", exist_ok=True)
-            sf.write(output_path, adv_audio, sr)
-
-            console.print(f"[green]✓[/green] Adversarial audio saved: {output_path}")
-
-    def advanced_advertorch_attack(self):
-        """Advertorch attack chaining"""
-        console.print("\n[bold yellow]Advertorch 체인 공격[/bold yellow]")
-
-        default_image = self.default_paths["image"]
-        console.print(f"[dim]💡 샘플 사용: Enter 키만 누르면 기본 샘플 이미지 사용[/dim]")
-        console.print(f"[dim]   디폴트: {default_image}[/dim]\n")
-
-        image_path = ask("Image file path", default=default_image)
-        if not os.path.exists(image_path):
-            console.print(f"[red]File not found: {image_path}[/red]")
-            console.print(f"[yellow]샘플 파일 생성: python3 create_samples.py[/yellow]")
-            return
-
-        strategies = self.advertorch.get_attack_strategies()
-
-        table = Table(title="Attack Strategies")
-        table.add_column("Strategy", style="cyan")
-        table.add_column("Attacks", style="yellow")
-        for name, chain in strategies.items():
-            attacks_str = " → ".join([a[0] for a in chain])
-            table.add_row(name, attacks_str)
-        console.print(table)
-
-        strategy = ask(
-            "Strategy",
-            choices=list(strategies.keys()),
-            default="stealth"
-        )
-
-        attack_chain = strategies[strategy]
-
-        try:
-            with console.status(f"[cyan]Running {strategy} attack chain...", spinner="dots"):
-                result = self.advertorch.chain_attacks(
-                    image_path,
-                    attack_chain,
-                    output_path=f"media/advertorch_{strategy}.png"
-                )
-
-            console.print(f"[green]✓[/green] Attack chain complete: media/advertorch_{strategy}.png")
-
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-
-    # === BENCHMARKS ===
-
-    def benchmark_advbench(self):
-        """AdvBench dataset import"""
-        console.print("\n[bold yellow]AdvBench 벤치마크 가져오기[/bold yellow]")
-
-        action = ask(
-            "Action",
-            choices=["import_harmful", "import_strings", "import_all", "cancel"],
-            default="import_harmful"
-        )
-
-        if action == "cancel":
-            return
-
-        try:
-            if action == "import_harmful":
-                stats = self.advbench.import_to_database("harmful_behaviors")
-            elif action == "import_strings":
-                stats = self.advbench.import_to_database("harmful_strings")
-            elif action == "import_all":
-                stats = self.advbench.import_all()
-                console.print("\n[bold green]All datasets imported![/bold green]")
-                for name, result in stats.items():
-                    if 'error' in result:
-                        console.print(f"  [red]{name}: {result['error']}[/red]")
-                    else:
-                        console.print(f"  [green]{name}: {result['new']} new prompts[/green]")
-
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-
-    def benchmark_mm_safety(self):
-        """MM-SafetyBench testing"""
-        console.print("\n[bold yellow]MM-SafetyBench 멀티모달 안전성 테스트[/bold yellow]")
-
-        action = ask(
-            "Action",
-            choices=["import", "test", "report", "cancel"],
-            default="import"
-        )
-
-        if action == "cancel":
-            return
-
-        if action == "import":
-            stats = self.mm_safety.import_test_cases_to_db()
-            console.print("[green]✓[/green] Test cases imported")
-
-        elif action == "test":
-            console.print("[yellow]Test cases loaded. Use multimodal LLM test (9) to run tests[/yellow]")
-
-        elif action == "report":
-            # Generate sample report
-            test_results = []  # Would be populated from actual tests
-            evaluation = self.mm_safety.evaluate_model_safety(test_results)
-
-            if 'error' in evaluation:
-                console.print(f"[red]{evaluation['error']}[/red]")
-            else:
-                report = self.mm_safety.generate_safety_report(evaluation)
-                console.print(report)
-
-    # === SETTINGS ===
-
-    async def security_system_scan(self):
-        """System vulnerability scan"""
-        console.print("\n[bold yellow]🔍 시스템 취약점 스캔[/bold yellow]\n")
-
-        # Import system scanner
-        from system.scanner_core import SystemScanner
-
-        # Get target
-        target = ask("대상 IP 또는 도메인", default="127.0.0.1")
-
-        # Get scan type
-        console.print("\n스캔 타입:")
-        console.print("  [green]quick[/green]: 빠른 스캔 (100개 포트)")
-        console.print("  [green]standard[/green]: 표준 스캔 (1000개 포트)")
-        console.print("  [green]full[/green]: 전체 스캔 (65535개 포트)")
-        scan_type = ask("스캔 타입", default="standard", choices=["quick", "standard", "full"])
-
-        # LLM 분석 사용 여부
-        use_llm = confirm("LLM 취약점 분석 사용?", default=False)
-
-        llm_config = None
-        if use_llm:
-            # Get LLM profiles
-            profiles = self.config.get_all_profiles(profile_type='llm')
-            if not profiles:
-                console.print("[yellow]LLM 프로필이 없습니다. 먼저 's' 메뉴에서 설정하세요.[/yellow]")
-                return
-
-            # Show profiles
-            console.print("\nLLM 프로필:")
-            for i, (name, profile) in enumerate(profiles.items(), 1):
-                console.print(f"  [green]{i}[/green]. {name} ({profile['provider']}/{profile['model']})")
-
-            profile_choice = ask("프로필 번호", default="1")
-            try:
-                profile_idx = int(profile_choice) - 1
-                profile_name = list(profiles.keys())[profile_idx]
-                profile = profiles[profile_name]
-
-                llm_config = {
-                    'provider': profile['provider'],
-                    'model': profile['model'],
-                    'api_key': profile['api_key']
-                }
-            except (ValueError, IndexError):
-                console.print("[yellow]잘못된 선택입니다. LLM 분석 없이 진행합니다.[/yellow]")
-                use_llm = False
-
-        # Create scanner
-        scanner = SystemScanner(self.db)
-
-        # Run scan
-        console.print(f"\n[cyan]스캔 시작: {target}...[/cyan]\n")
-
-        try:
-            scan_result = await scanner.scan(
-                target=target,
-                scan_type=scan_type,
-                use_llm=use_llm,
-                llm_config=llm_config
-            )
-
-            # Show LLM analysis if available
-            if scan_result.get('llm_analysis'):
-                console.print("\n[bold cyan]🤖 LLM 취약점 분석[/bold cyan]\n")
-                console.print(scan_result['llm_analysis'])
-
-            console.print("\n[green]✓ 스캔 완료![/green]")
-
-            # Export option
-            if confirm("\n리포트 내보내기?", default=False):
-                format_choice = ask("형식 (json/markdown)", default="markdown")
-                report = scanner.export_report(scan_result['scan_id'], format=format_choice)
-
-                filename = f"system_scan_{scan_result['scan_id']}.{format_choice.replace('markdown', 'md')}"
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(report)
-
-                console.print(f"[green]✓ 리포트 저장됨: {filename}[/green]")
-
-        except Exception as e:
-            console.print(f"[red]스캔 실패: {e}[/red]")
-            import traceback
-            console.print(f"[dim]{traceback.format_exc()}[/dim]")
-
     def security_system_scan_history(self):
         """View system scan history"""
         console.print("\n[bold yellow]📊 시스템 스캔 이력[/bold yellow]\n")
@@ -4094,17 +3736,71 @@ class PromptArsenal:
     # === CTF Auto-Solver Methods ===
 
     def ctf_add_challenge(self):
-        """Add CTF challenge"""
+        """Add CTF challenge with enhanced UI"""
         console.print("\n[bold magenta]🚩 CTF 문제 추가[/bold magenta]\n")
 
+        # 추가 방법 선택
+        console.print("[yellow]추가 방법:[/yellow]")
+        console.print("  [green]1[/green]. 직접 입력 (상세)")
+        console.print("  [green]2[/green]. 템플릿 사용 (빠른 추가)")
+        console.print("  [green]3[/green]. JSON 파일에서 가져오기")
+
+        method = ask("방법 선택", default="1", choices=["1", "2", "3"])
+
+        if method == "3":
+            self._ctf_import_from_json()
+            return
+        elif method == "2":
+            challenge_data = self._ctf_use_template()
+        else:
+            challenge_data = self._ctf_manual_input()
+
+        if not challenge_data:
+            return
+
+        # 입력 검증
+        if not self._ctf_validate_challenge(challenge_data):
+            return
+
+        # 미리보기
+        console.print("\n[bold cyan]📋 입력 내용 확인:[/bold cyan]")
+        console.print(f"  제목: {challenge_data.get('title')}")
+        console.print(f"  카테고리: {challenge_data.get('category')}")
+        console.print(f"  난이도: {challenge_data.get('difficulty')}")
+        console.print(f"  설명: {challenge_data.get('description', '')[:100]}")
+
+        if challenge_data.get('url'):
+            console.print(f"  URL: {challenge_data['url']}")
+        if challenge_data.get('file_path'):
+            console.print(f"  파일: {challenge_data['file_path']}")
+
+        if not confirm("\n이 내용으로 추가하시겠습니까?", default=True):
+            console.print("[yellow]취소되었습니다.[/yellow]")
+            return
+
+        # Insert to DB
+        try:
+            challenge_id = self.db.insert_ctf_challenge(challenge_data)
+            console.print(f"\n[green]✓ CTF 문제가 추가되었습니다 (ID: {challenge_id})[/green]")
+
+            # 바로 풀이 실행 옵션
+            if confirm("\n바로 자동 풀이를 실행하시겠습니까?", default=False):
+                import asyncio
+                asyncio.run(self.ctf_auto_solve())
+
+        except Exception as e:
+            console.print(f"[red]추가 실패: {e}[/red]")
+
+    def _ctf_manual_input(self):
+        """Manual challenge input with enhanced validation"""
         # Category selection
-        console.print("[yellow]카테고리:[/yellow]")
-        console.print("  1. Web")
-        console.print("  2. Forensics")
-        console.print("  3. Pwn")
-        console.print("  4. Crypto")
-        console.print("  5. Reversing")
-        console.print("  6. Misc")
+        console.print("\n[yellow]카테고리:[/yellow]")
+        console.print("  [green]1[/green]. Web (SQL Injection, XSS, LFI 등)")
+        console.print("  [green]2[/green]. Forensics (파일 분석, 메타데이터)")
+        console.print("  [green]3[/green]. Pwn (Buffer Overflow, ROP)")
+        console.print("  [green]4[/green]. Crypto (암호화, 해시)")
+        console.print("  [green]5[/green]. Reversing (역공학)")
+        console.print("  [green]6[/green]. Misc (기타)")
 
         category_map = {
             '1': 'web', '2': 'forensics', '3': 'pwn',
@@ -4115,13 +3811,18 @@ class PromptArsenal:
         category = category_map.get(category_choice, 'misc')
 
         # Basic info
-        title = ask("문제 제목")
+        title = ask("문제 제목 (필수)")
         if not title:
             console.print("[red]제목은 필수입니다.[/red]")
-            return
+            return None
 
         description = ask("문제 설명", default="")
-        difficulty = ask("난이도 (easy/medium/hard)", default="medium")
+
+        console.print("\n[dim]난이도 가이드:[/dim]")
+        console.print("  [green]easy[/green]: 기본 취약점, 단순 공격")
+        console.print("  [yellow]medium[/yellow]: 조합 공격, 우회 기법 필요")
+        console.print("  [red]hard[/red]: 복잡한 공격 체인, 고급 기법")
+        difficulty = ask("난이도 (easy/medium/hard)", default="medium", choices=["easy", "medium", "hard"])
 
         challenge_data = {
             'title': title,
@@ -4131,37 +3832,50 @@ class PromptArsenal:
             'hints': []
         }
 
-        # Category-specific fields
+        # Category-specific fields with validation
         if category == 'web':
+            console.print("\n[cyan]💡 팁: http:// 또는 https://를 포함해주세요[/cyan]")
             url = ask("URL (필수)", default="")
             if url:
+                # URL 검증
+                if not url.startswith(('http://', 'https://')):
+                    if confirm("http:// 를 자동으로 추가할까요?", default=True):
+                        url = 'http://' + url
                 challenge_data['url'] = url
             else:
                 console.print("[red]Web 문제는 URL이 필수입니다.[/red]")
-                return
+                return None
 
         elif category in ['forensics', 'reversing']:
+            console.print("\n[cyan]💡 팁: 절대 경로 또는 상대 경로 입력[/cyan]")
             file_path = ask("파일 경로", default="")
             if file_path:
+                # 파일 존재 확인
+                import os
+                if not os.path.exists(file_path):
+                    console.print(f"[yellow]⚠️  파일이 존재하지 않습니다: {file_path}[/yellow]")
+                    if not confirm("계속 진행하시겠습니까?", default=False):
+                        return None
                 challenge_data['file_path'] = file_path
 
         elif category == 'pwn':
-            file_path = ask("바이너리 파일 경로", default="")
+            console.print("\n[cyan]💡 팁: 로컬 바이너리 또는 원격 서버 정보 입력[/cyan]")
+            file_path = ask("바이너리 파일 경로 (선택)", default="")
             if file_path:
                 challenge_data['file_path'] = file_path
 
-            host = ask("호스트 (선택)", default="")
-            port = ask("포트 (선택)", default="")
+            host = ask("원격 호스트 (선택, 예: 127.0.0.1)", default="")
+            port = ask("원격 포트 (선택, 예: 9999)", default="")
             if host:
                 challenge_data['host'] = host
             if port:
                 try:
                     challenge_data['port'] = int(port)
-                except:
-                    pass
+                except ValueError:
+                    console.print("[yellow]⚠️  포트는 숫자여야 합니다[/yellow]")
 
         elif category == 'crypto':
-            ciphertext = ask("암호문", default="")
+            ciphertext = ask("암호문 (선택)", default="")
             if ciphertext:
                 challenge_data['ciphertext'] = ciphertext
 
@@ -4169,24 +3883,152 @@ class PromptArsenal:
             if key:
                 challenge_data['key'] = key
 
-        # Hints
+        # Hints (improved UI)
+        console.print("\n[yellow]힌트 입력 (선택, Enter만 누르면 종료):[/yellow]")
         hints = []
         while True:
-            hint = ask(f"힌트 {len(hints)+1} (Enter=종료)", default="")
+            hint = ask(f"  힌트 #{len(hints)+1}", default="")
             if not hint:
                 break
             hints.append(hint)
+            console.print(f"  [green]✓ 힌트 {len(hints)}개 추가됨[/green]")
 
         if hints:
             challenge_data['hints'] = hints
 
-        # Insert to DB
-        challenge_id = self.db.insert_ctf_challenge(challenge_data)
+        return challenge_data
 
-        console.print(f"\n[green]✓ CTF 문제가 추가되었습니다 (ID: {challenge_id})[/green]")
+    def _ctf_use_template(self):
+        """Quick challenge creation using templates"""
+        console.print("\n[yellow]템플릿 선택:[/yellow]")
+        templates = {
+            '1': {
+                'name': 'SQL Injection (Web)',
+                'category': 'web',
+                'difficulty': 'easy',
+                'description': 'SQL Injection 취약점이 존재하는 웹 애플리케이션',
+                'url': 'http://example.com/login'
+            },
+            '2': {
+                'name': 'Buffer Overflow (Pwn)',
+                'category': 'pwn',
+                'difficulty': 'medium',
+                'description': 'Stack Buffer Overflow 취약점',
+                'file_path': './challenge.bin'
+            },
+            '3': {
+                'name': 'File Analysis (Forensics)',
+                'category': 'forensics',
+                'difficulty': 'easy',
+                'description': '숨겨진 플래그를 찾으세요',
+                'file_path': './evidence.png'
+            },
+            '4': {
+                'name': 'Caesar Cipher (Crypto)',
+                'category': 'crypto',
+                'difficulty': 'easy',
+                'description': 'Caesar Cipher로 암호화된 메시지',
+                'ciphertext': ''
+            }
+        }
+
+        for key, tmpl in templates.items():
+            console.print(f"  [green]{key}[/green]. {tmpl['name']} ({tmpl['difficulty']})")
+
+        choice = ask("템플릿 선택 (1-4)", default="1")
+        template = templates.get(choice)
+
+        if not template:
+            console.print("[red]잘못된 선택입니다.[/red]")
+            return None
+
+        # 템플릿 복사 및 커스터마이즈
+        challenge_data = template.copy()
+        del challenge_data['name']  # name 필드 제거
+
+        console.print(f"\n[cyan]선택된 템플릿: {templates[choice]['name']}[/cyan]")
+
+        # 필수 필드만 입력받기
+        title = ask("문제 제목", default=templates[choice]['name'])
+        challenge_data['title'] = title
+
+        if challenge_data['category'] == 'web':
+            url = ask("URL", default=challenge_data.get('url', ''))
+            if url:
+                challenge_data['url'] = url
+        elif 'file_path' in challenge_data:
+            file_path = ask("파일 경로", default=challenge_data.get('file_path', ''))
+            if file_path:
+                challenge_data['file_path'] = file_path
+        elif challenge_data['category'] == 'crypto':
+            ciphertext = ask("암호문", default="")
+            if ciphertext:
+                challenge_data['ciphertext'] = ciphertext
+
+        console.print("[green]✓ 템플릿 설정 완료[/green]")
+        return challenge_data
+
+    def _ctf_import_from_json(self):
+        """Import challenges from JSON file"""
+        console.print("\n[yellow]JSON 파일에서 가져오기[/yellow]")
+
+        file_path = ask("JSON 파일 경로", default="challenges.json")
+
+        try:
+            import json
+            import os
+
+            if not os.path.exists(file_path):
+                console.print(f"[red]파일을 찾을 수 없습니다: {file_path}[/red]")
+                return
+
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            # 단일 문제 또는 배열 지원
+            challenges = data if isinstance(data, list) else [data]
+
+            added_count = 0
+            for challenge in challenges:
+                if self._ctf_validate_challenge(challenge):
+                    try:
+                        self.db.insert_ctf_challenge(challenge)
+                        added_count += 1
+                    except Exception as e:
+                        console.print(f"[red]추가 실패: {challenge.get('title', 'Unknown')} - {e}[/red]")
+
+            console.print(f"\n[green]✓ {added_count}/{len(challenges)}개 문제가 추가되었습니다[/green]")
+
+        except json.JSONDecodeError as e:
+            console.print(f"[red]JSON 파싱 오류: {e}[/red]")
+        except Exception as e:
+            console.print(f"[red]파일 읽기 실패: {e}[/red]")
+
+    def _ctf_validate_challenge(self, challenge_data):
+        """Validate challenge data"""
+        required_fields = ['title', 'category', 'difficulty']
+
+        for field in required_fields:
+            if not challenge_data.get(field):
+                console.print(f"[red]필수 필드가 누락되었습니다: {field}[/red]")
+                return False
+
+        # 카테고리별 필수 필드 확인
+        category = challenge_data['category']
+
+        if category == 'web' and not challenge_data.get('url'):
+            console.print("[red]Web 문제는 URL이 필수입니다[/red]")
+            return False
+
+        # 난이도 검증
+        if challenge_data['difficulty'] not in ['easy', 'medium', 'hard']:
+            console.print(f"[yellow]⚠️  난이도는 easy/medium/hard 중 하나여야 합니다[/yellow]")
+            challenge_data['difficulty'] = 'medium'
+
+        return True
 
     async def ctf_auto_solve(self):
-        """Auto-solve CTF challenge"""
+        """Auto-solve CTF challenge with enhanced UI"""
         console.print("\n[bold magenta]🚩 CTF 자동 풀이[/bold magenta]\n")
 
         # Get unsolved challenges
@@ -4197,57 +4039,81 @@ class PromptArsenal:
             console.print("[dim]'f'를 눌러 문제를 추가하세요.[/dim]")
             return
 
-        # Show challenges table
-        table = Table(title="미해결 CTF 문제")
-        table.add_column("ID", style="magenta", justify="right")
-        table.add_column("제목", style="cyan")
-        table.add_column("카테고리", style="green")
-        table.add_column("난이도", style="yellow")
-        table.add_column("생성일", style="dim")
+        # Show challenges table with enhanced info
+        table = Table(title="🎯 미해결 CTF 문제", show_header=True, header_style="bold magenta")
+        table.add_column("ID", style="magenta", justify="right", width=5)
+        table.add_column("제목", style="cyan", width=35)
+        table.add_column("카테고리", style="green", width=12)
+        table.add_column("난이도", style="yellow", width=8)
+        table.add_column("생성일", style="dim", width=12)
 
         for challenge in challenges:
+            # 난이도별 색상
+            difficulty_color = {
+                'easy': 'green',
+                'medium': 'yellow',
+                'hard': 'red'
+            }.get(challenge['difficulty'], 'white')
+
             table.add_row(
                 str(challenge['id']),
-                challenge['title'][:40],
+                challenge['title'][:35],
                 challenge['category'].upper(),
-                challenge['difficulty'],
+                f"[{difficulty_color}]{challenge['difficulty']}[/{difficulty_color}]",
                 challenge['created_at'][:10]
             )
 
         console.print(table)
 
         # Select challenge
-        challenge_id = ask("\n풀이할 문제 ID", default="")
+        challenge_id = ask("\n풀이할 문제 ID (또는 'all'로 전체 풀이)", default="")
         if not challenge_id:
             return
 
+        # 전체 풀이 모드
+        batch_mode = challenge_id.lower() == 'all'
+
+        if not batch_mode:
+            try:
+                challenge_id = int(challenge_id)
+            except ValueError:
+                console.print("[red]숫자를 입력하거나 'all'을 입력하세요.[/red]")
+                return
+
+        # ProfileManager 활용
+        from core import get_profile_manager
+        pm = get_profile_manager()
+
+        # LLM 프로필 선택
+        llm_profiles = pm.list_llm_profiles()
+
+        if not llm_profiles:
+            console.print("[red]LLM API 프로필을 먼저 설정하세요 ('s' 메뉴)[/red]")
+            return
+
+        console.print("\n[yellow]사용할 LLM 프로필:[/yellow]")
+        profile_list = list(llm_profiles.keys())
+        for i, profile_name in enumerate(profile_list, 1):
+            profile = llm_profiles[profile_name]
+            default_marker = " ⭐" if profile_name == pm.default_profile else ""
+            console.print(f"  [green]{i}[/green]. {profile_name} ({profile['provider']}/{profile['model']}){default_marker}")
+
+        profile_choice = ask("프로필 선택 (1-{})".format(len(profile_list)), default="1")
+
         try:
-            challenge_id = int(challenge_id)
+            profile_idx = int(profile_choice) - 1
+            if 0 <= profile_idx < len(profile_list):
+                profile_name = profile_list[profile_idx]
+                profile = llm_profiles[profile_name]
+            else:
+                console.print("[red]유효한 프로필 번호를 입력하세요.[/red]")
+                return
         except ValueError:
             console.print("[red]숫자를 입력하세요.[/red]")
             return
 
-        # Get API profile
-        profiles = self.config.get_all_profiles()
-
-        if not profiles:
-            console.print("[red]API 프로필을 먼저 설정하세요 ('s' 메뉴)[/red]")
-            return
-
-        console.print("\n[yellow]사용할 API 프로필:[/yellow]")
-        for i, profile_name in enumerate(profiles.keys(), 1):
-            profile = profiles[profile_name]
-            console.print(f"  {i}. {profile_name} ({profile.get('provider')}/{profile.get('model')})")
-
-        profile_choice = ask("프로필 선택", default="1")
-
-        try:
-            profile_idx = int(profile_choice) - 1
-            profile_name = list(profiles.keys())[profile_idx]
-            profile = profiles[profile_name]
-        except:
-            console.print("[red]유효한 프로필 번호를 입력하세요.[/red]")
-            return
+        # 재시도 횟수 설정
+        max_retries = int(ask("최대 재시도 횟수", default="3"))
 
         # Create CTFSolver
         from ctf.ctf_core import CTFSolver
@@ -4259,17 +4125,129 @@ class PromptArsenal:
             api_key=profile['api_key']
         )
 
-        # Solve challenge
-        console.print(f"\n[cyan]문제 풀이를 시작합니다...[/cyan]")
+        # 배치 모드 또는 단일 풀이
+        if batch_mode:
+            await self._ctf_batch_solve(solver, challenges, max_retries)
+        else:
+            await self._ctf_single_solve(solver, challenge_id, max_retries)
 
-        result = await solver.solve_challenge(challenge_id, max_retries=3)
+    async def _ctf_single_solve(self, solver, challenge_id, max_retries):
+        """Solve single CTF challenge with progress display"""
+        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+
+        console.print(f"\n[cyan]{'='*60}[/cyan]")
+        console.print(f"[bold cyan]🎯 문제 풀이 시작[/bold cyan]")
+        console.print(f"[cyan]{'='*60}[/cyan]\n")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console
+        ) as progress:
+            task = progress.add_task("[cyan]풀이 진행 중...", total=100)
+
+            # Solve challenge
+            result = await solver.solve_challenge(challenge_id, max_retries=max_retries)
+
+            progress.update(task, completed=100)
+
+        # 결과 출력
+        console.print(f"\n[cyan]{'='*60}[/cyan]")
 
         if result.get('success'):
-            console.print(f"\n[bold green]🎉 성공! FLAG: {result.get('flag')}[/bold green]")
+            console.print(f"[bold green]🎉 성공![/bold green]")
+            console.print(f"[bold green]FLAG: {result.get('flag')}[/bold green]")
         else:
-            console.print(f"\n[bold red]❌ 실패: {result.get('error')}[/bold red]")
+            console.print(f"[bold red]❌ 실패[/bold red]")
+            console.print(f"[red]오류: {result.get('error', 'Unknown error')}[/red]")
 
-        console.print(f"\n[dim]Execution Log ID: {result.get('log_id')}[/dim]")
+        # 상세 정보
+        console.print(f"\n[bold]📊 실행 정보:[/bold]")
+        console.print(f"  • 시도 횟수: {result.get('attempts', 0)}/{max_retries}")
+        console.print(f"  • 소요 시간: {result.get('duration', 0):.2f}초")
+        console.print(f"  • LLM: {result.get('llm_provider')}/{result.get('llm_model')}")
+        console.print(f"  • 로그 ID: {result.get('log_id')}")
+
+        console.print(f"[cyan]{'='*60}[/cyan]\n")
+
+        # 리포트 저장 옵션
+        if confirm("결과를 파일로 저장하시겠습니까?", default=False):
+            filename = f"ctf_result_{challenge_id}_{result.get('log_id')}.txt"
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(f"CTF Auto-Solve Result\n")
+                f.write(f"={'='*60}\n\n")
+                f.write(f"Challenge ID: {challenge_id}\n")
+                f.write(f"Success: {result.get('success')}\n")
+                f.write(f"Flag: {result.get('flag', 'N/A')}\n")
+                f.write(f"Attempts: {result.get('attempts')}/{max_retries}\n")
+                f.write(f"Duration: {result.get('duration'):.2f}s\n")
+                f.write(f"LLM: {result.get('llm_provider')}/{result.get('llm_model')}\n")
+                f.write(f"Log ID: {result.get('log_id')}\n")
+                if not result.get('success'):
+                    f.write(f"\nError: {result.get('error')}\n")
+
+            console.print(f"[green]✓ 결과 저장: {filename}[/green]")
+
+    async def _ctf_batch_solve(self, solver, challenges, max_retries):
+        """Batch solve multiple CTF challenges"""
+        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+
+        console.print(f"\n[bold yellow]⚡ 배치 모드: {len(challenges)}개 문제 풀이[/bold yellow]\n")
+
+        if not confirm("계속 진행하시겠습니까?", default=True):
+            return
+
+        results = []
+        success_count = 0
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console
+        ) as progress:
+            overall_task = progress.add_task("[cyan]전체 진행", total=len(challenges))
+
+            for idx, challenge in enumerate(challenges, 1):
+                challenge_id = challenge['id']
+                console.print(f"\n[cyan]{'─'*60}[/cyan]")
+                console.print(f"[bold cyan]문제 {idx}/{len(challenges)}: {challenge['title']}[/bold cyan]")
+
+                result = await solver.solve_challenge(challenge_id, max_retries=max_retries)
+                results.append({
+                    'challenge': challenge,
+                    'result': result
+                })
+
+                if result.get('success'):
+                    success_count += 1
+                    console.print(f"[green]✓ 성공! FLAG: {result.get('flag')}[/green]")
+                else:
+                    console.print(f"[red]✗ 실패: {result.get('error', 'Unknown')}[/red]")
+
+                progress.update(overall_task, completed=idx)
+
+        # 배치 결과 요약
+        console.print(f"\n[bold cyan]{'='*60}[/bold cyan]")
+        console.print(f"[bold cyan]📊 배치 풀이 결과 요약[/bold cyan]")
+        console.print(f"[bold cyan]{'='*60}[/bold cyan]\n")
+
+        console.print(f"  • 전체 문제: {len(challenges)}개")
+        console.print(f"  • 성공: [green]{success_count}개[/green]")
+        console.print(f"  • 실패: [red]{len(challenges) - success_count}개[/red]")
+        console.print(f"  • 성공률: {success_count / len(challenges) * 100:.1f}%\n")
+
+        # 성공한 문제 목록
+        if success_count > 0:
+            console.print("[bold green]성공한 문제:[/bold green]")
+            for item in results:
+                if item['result'].get('success'):
+                    console.print(f"  • {item['challenge']['title']}: {item['result'].get('flag')}")
+
+        console.print(f"\n[cyan]{'='*60}[/cyan]")
 
     def ctf_list_and_stats(self):
         """List CTF challenges and statistics"""
@@ -4339,6 +4317,99 @@ class PromptArsenal:
             )
 
         console.print(table)
+
+        # Ask if user wants to delete challenges
+        console.print("\n[yellow]문제 삭제를 원하시나요?[/yellow]")
+        delete_choice = ask("삭제하시겠습니까? (y/n)", default="n").lower()
+
+        if delete_choice == 'y':
+            self.ctf_delete_challenges(challenges)
+
+    def ctf_delete_challenges(self, challenges: List[Dict] = None):
+        """Delete CTF challenges with confirmation"""
+        console.print("\n[bold red]🗑️  CTF 문제 삭제[/bold red]\n")
+
+        # If challenges not provided, ask for IDs
+        if not challenges:
+            challenges = self.db.get_ctf_challenges(limit=50)
+            if not challenges:
+                console.print("[yellow]삭제할 문제가 없습니다.[/yellow]")
+                return
+
+        console.print("[yellow]삭제 방법:[/yellow]")
+        console.print("  [green]1[/green]. 개별 삭제 (ID 입력)")
+        console.print("  [green]2[/green]. 전체 삭제 (모든 문제)")
+        console.print("  [green]3[/green]. 범위 삭제 (ID 범위 입력)")
+
+        method = ask("방법 선택 (1-3)", default="1", choices=["1", "2", "3"])
+
+        challenge_ids = []
+
+        if method == "2":
+            # Delete all
+            challenge_ids = [c['id'] for c in challenges]
+            console.print(f"\n[yellow]⚠️  총 {len(challenge_ids)}개의 문제를 삭제합니다.[/yellow]")
+
+        elif method == "3":
+            # Delete range
+            start_id = ask("시작 ID", default="1")
+            end_id = ask("종료 ID", default=str(max(c['id'] for c in challenges)))
+
+            try:
+                start = int(start_id)
+                end = int(end_id)
+                challenge_ids = [c['id'] for c in challenges if start <= c['id'] <= end]
+
+                if not challenge_ids:
+                    console.print("[yellow]해당 범위에 문제가 없습니다.[/yellow]")
+                    return
+
+                console.print(f"\n[yellow]⚠️  ID {start}-{end} 범위의 {len(challenge_ids)}개 문제를 삭제합니다.[/yellow]")
+
+            except ValueError:
+                console.print("[red]❌ 올바른 ID를 입력하세요.[/red]")
+                return
+
+        else:
+            # Delete individual
+            id_input = ask("삭제할 문제 ID (쉼표로 구분)", default="")
+
+            if not id_input.strip():
+                console.print("[yellow]삭제 취소됨.[/yellow]")
+                return
+
+            try:
+                challenge_ids = [int(id.strip()) for id in id_input.split(',')]
+            except ValueError:
+                console.print("[red]❌ 올바른 ID를 입력하세요.[/red]")
+                return
+
+        # Confirmation
+        console.print(f"\n[red]⚠️  정말로 {len(challenge_ids)}개의 문제를 삭제하시겠습니까?[/red]")
+        console.print("[dim]삭제된 문제는 복구할 수 없습니다.[/dim]")
+
+        confirm = ask("확인 (yes/no)", default="no").lower()
+
+        if confirm not in ['yes', 'y']:
+            console.print("[yellow]삭제 취소됨.[/yellow]")
+            return
+
+        # Delete
+        if len(challenge_ids) == 1:
+            # Single deletion
+            success = self.db.delete_ctf_challenge(challenge_ids[0])
+            if success:
+                console.print(f"[green]✅ 문제 ID {challenge_ids[0]} 삭제 완료[/green]")
+            else:
+                console.print(f"[red]❌ 문제 ID {challenge_ids[0]} 삭제 실패 (존재하지 않음)[/red]")
+        else:
+            # Batch deletion
+            result = self.db.delete_ctf_challenges(challenge_ids)
+
+            console.print(f"\n[green]✅ {result['deleted']}개 문제 삭제 완료[/green]")
+
+            if result['failed']:
+                console.print(f"[yellow]⚠️  {len(result['failed'])}개 문제 삭제 실패 (존재하지 않음): {result['failed']}[/yellow]")
 
     def settings_api_profiles(self):
         """Manage API profiles"""

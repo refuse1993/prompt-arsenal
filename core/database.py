@@ -1763,3 +1763,71 @@ class ArsenalDB:
             'avg_duration': round(avg_duration, 2),
             'most_used_tools': [{'tool': tool, 'count': count} for tool, count in tool_counts]
         }
+
+    def delete_ctf_challenge(self, challenge_id: int) -> bool:
+        """
+        Delete CTF challenge by ID
+
+        Args:
+            challenge_id: Challenge ID to delete
+
+        Returns:
+            True if deleted successfully, False if not found
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Check if challenge exists
+        cursor.execute('SELECT id FROM ctf_challenges WHERE id = ?', (challenge_id,))
+        if not cursor.fetchone():
+            conn.close()
+            return False
+
+        # Delete related execution logs first
+        cursor.execute('DELETE FROM ctf_execution_logs WHERE challenge_id = ?', (challenge_id,))
+
+        # Delete challenge
+        cursor.execute('DELETE FROM ctf_challenges WHERE id = ?', (challenge_id,))
+
+        conn.commit()
+        conn.close()
+        return True
+
+    def delete_ctf_challenges(self, challenge_ids: List[int]) -> Dict:
+        """
+        Delete multiple CTF challenges
+
+        Args:
+            challenge_ids: List of challenge IDs to delete
+
+        Returns:
+            Dict with deleted count and failed IDs
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        deleted = 0
+        failed = []
+
+        for challenge_id in challenge_ids:
+            # Check if challenge exists
+            cursor.execute('SELECT id FROM ctf_challenges WHERE id = ?', (challenge_id,))
+            if not cursor.fetchone():
+                failed.append(challenge_id)
+                continue
+
+            # Delete related execution logs
+            cursor.execute('DELETE FROM ctf_execution_logs WHERE challenge_id = ?', (challenge_id,))
+
+            # Delete challenge
+            cursor.execute('DELETE FROM ctf_challenges WHERE id = ?', (challenge_id,))
+            deleted += 1
+
+        conn.commit()
+        conn.close()
+
+        return {
+            'deleted': deleted,
+            'failed': failed,
+            'total_requested': len(challenge_ids)
+        }

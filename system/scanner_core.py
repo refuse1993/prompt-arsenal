@@ -24,8 +24,20 @@ class ScanFinding:
     affected_service: str
     port: Optional[int] = None
     cve_id: Optional[str] = None
+    cvss_score: Optional[float] = None
+    cvss_v3_score: Optional[float] = None
+    cvss_vector: Optional[str] = None
+    cwe_ids: Optional[List[str]] = None
+    references: Optional[List[str]] = None
     recommendation: str = ""
     exploit_available: bool = False
+
+    def __post_init__(self):
+        """Initialize mutable default values"""
+        if self.cwe_ids is None:
+            self.cwe_ids = []
+        if self.references is None:
+            self.references = []
 
 
 class SystemScanner:
@@ -110,6 +122,11 @@ class SystemScanner:
                         affected_service=f"{port_info.service} {port_info.version}",
                         port=port_info.port,
                         cve_id=cve.cve_id,
+                        cvss_score=cve.cvss_score,
+                        cvss_v3_score=cve.cvss_v3_score,
+                        cvss_vector=cve.cvss_vector,
+                        cwe_ids=cve.cwe_ids,
+                        references=cve.references,
                         recommendation=f"Update {port_info.service} to the latest version",
                         exploit_available=cve.exploit_available
                     ))
@@ -230,7 +247,7 @@ class SystemScanner:
             return 'Low'
 
     def _print_results(self, scan_result: Dict):
-        """스캔 결과 출력"""
+        """스캔 결과 출력 (개선된 CVE 표시)"""
         summary = scan_result['summary']
         risk_score = summary['risk_score']
         risk_level = summary['risk_level']
@@ -264,10 +281,10 @@ class SystemScanner:
             print(f"  🟢 Low: {severity_counts['low']}")
         print()
 
-        # 주요 발견 사항
+        # 주요 발견 사항 (CVE 상세)
         if scan_result['findings']:
             print("Top Findings:")
-            for i, finding in enumerate(scan_result['findings'][:5], 1):
+            for i, finding in enumerate(scan_result['findings'][:10], 1):
                 severity_symbol = {
                     'critical': '🔴',
                     'high': '🟠',
@@ -275,9 +292,41 @@ class SystemScanner:
                     'low': '🟢'
                 }.get(finding['severity'], '⚪')
 
-                print(f"  {i}. {severity_symbol} [{finding['severity'].upper()}] {finding['title']}")
+                print(f"\n  {i}. {severity_symbol} [{finding['severity'].upper()}] {finding['title']}")
+
+                # CVE 상세 정보
                 if finding.get('cve_id'):
-                    print(f"     CVE: {finding['cve_id']}")
+                    cve_id = finding['cve_id']
+                    print(f"     CVE: {cve_id}")
+
+                    # CVSS 점수
+                    if finding.get('cvss_v3_score'):
+                        print(f"     CVSS v3: {finding['cvss_v3_score']:.1f}")
+                    elif finding.get('cvss_score'):
+                        print(f"     CVSS: {finding['cvss_score']:.1f}")
+
+                    # Exploit 가능 여부
+                    if finding.get('exploit_available'):
+                        print(f"     ⚠️  Exploit Available")
+
+                    # CWE IDs
+                    if finding.get('cwe_ids') and finding['cwe_ids']:
+                        cwe_str = ', '.join(finding['cwe_ids'][:3])
+                        print(f"     CWE: {cwe_str}")
+
+                    # 참조 링크
+                    nvd_url = f"https://nvd.nist.gov/vuln/detail/{cve_id}"
+                    exploit_db_url = f"https://www.exploit-db.com/search?cve={cve_id}"
+                    print(f"     🔗 NVD: {nvd_url}")
+                    if finding.get('exploit_available'):
+                        print(f"     🔗 Exploit-DB: {exploit_db_url}")
+
+                # 설명 (짧게)
+                if finding.get('description'):
+                    desc = finding['description'][:100]
+                    if len(finding['description']) > 100:
+                        desc += "..."
+                    print(f"     {desc}")
 
         print(f"\n{'='*80}")
         print(f"✅ Scan completed in {scan_result['duration']:.2f} seconds")
