@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Text Prompts - Prompt Arsenal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: var(--spacing-sm);">◇ 텍스트 프롬프트</h1>
+        <p style="color: hsl(var(--muted-foreground));">22,000+ 공격 프롬프트 데이터베이스</p>
+    </div>
+</div>
+
+<div class="card mt-2">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <h3 class="card-title">All Prompts</h3>
+        <div id="categories-container" style="flex: 1; display: flex; justify-content: flex-end;">
+            <!-- Categories will be loaded here -->
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="search-container" class="mb-1">
+            <!-- Search bar will be rendered here -->
+        </div>
+
+        <div id="filter-container" class="mb-1">
+            <!-- Filters will be rendered here -->
+        </div>
+
+        <div id="table-container">
+            <!-- Table will be rendered here -->
+        </div>
+
+        <div id="pagination-container">
+            <!-- Pagination will be rendered here -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='js/modules/prompts.js') }}"></script>
+{% endblock %}

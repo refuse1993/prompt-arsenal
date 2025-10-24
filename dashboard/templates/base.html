@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Prompt Arsenal 대시보드{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">⚔️ Prompt Arsenal</h1>
+                <nav class="nav">
+                    <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">홈</a>
+                    <a href="/prompts" class="nav-link {% if request.path == '/prompts' %}active{% endif %}">프롬프트</a>
+                    <a href="/multimodal" class="nav-link {% if request.path == '/multimodal' %}active{% endif %}">멀티모달</a>
+                    <a href="/multiturn" class="nav-link {% if request.path == '/multiturn' %}active{% endif %}">멀티턴</a>
+                    <a href="/ctf" class="nav-link {% if request.path == '/ctf' %}active{% endif %}">CTF</a>
+                    <a href="/security" class="nav-link {% if request.path == '/security' %}active{% endif %}">보안 스캔</a>
+                    <a href="/system" class="nav-link {% if request.path == '/system' %}active{% endif %}">시스템</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Prompt Arsenal - AI 보안 테스팅 프레임워크</p>
+        </div>
+    </footer>
+
+    <!-- Common Scripts -->
+    <script type="module" src="{{ url_for('static', filename='js/components/Card.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/components/Table.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/components/Chart.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/components/Modal.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

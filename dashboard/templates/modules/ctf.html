@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}CTF Framework - Prompt Arsenal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="flex-between">
+        <div>
+            <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: var(--spacing-sm);">🎯 CTF Framework</h1>
+            <p style="color: var(--text-secondary);">Playwright 기반 웹 취약점 자동 공격 - 70% 성공률</p>
+        </div>
+        <button class="btn btn-primary" id="crawl-btn">🔍 Crawl Competition</button>
+    </div>
+</div>
+
+<div class="grid grid-3 mt-2" id="stats-container">
+    <!-- Stats will be loaded here -->
+</div>
+
+<div class="grid grid-2 mt-2">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Attack Categories</h3>
+        </div>
+        <div class="card-body" id="categories-chart">
+            <!-- Chart will be loaded here -->
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Success Rates by Category</h3>
+        </div>
+        <div class="card-body" id="success-chart">
+            <!-- Chart will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">CTF Competitions</h3>
+    </div>
+    <div class="card-body" id="competitions-container">
+        <!-- Competitions will be loaded here -->
+    </div>
+</div>
+
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">Challenges</h3>
+    </div>
+    <div class="card-body">
+        <div id="filter-container" class="mb-1">
+            <!-- Filters will be rendered here -->
+        </div>
+
+        <div id="table-container">
+            <!-- Table will be rendered here -->
+        </div>
+
+        <div id="pagination-container">
+            <!-- Pagination will be rendered here -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='js/modules/ctf.js') }}"></script>
+{% endblock %}

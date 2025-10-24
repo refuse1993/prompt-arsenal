@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Multi-turn Campaigns - Prompt Arsenal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: var(--spacing-sm);">◉ 멀티턴 캠페인</h1>
+        <p style="color: hsl(var(--muted-foreground));">단계적 공격 캠페인 - 7가지 전략 (60-82.5% ASR)</p>
+    </div>
+</div>
+
+<div class="grid grid-4 mt-2" id="strategies-container">
+    <!-- Strategies will be loaded here -->
+</div>
+
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">Strategy Success Rates</h3>
+    </div>
+    <div class="card-body" id="success-chart">
+        <!-- Chart will be loaded here -->
+    </div>
+</div>
+
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">Campaigns</h3>
+    </div>
+    <div class="card-body">
+        <div id="campaigns-container">
+            <!-- Campaigns will be rendered here -->
+        </div>
+    </div>
+</div>
+
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">Test Results</h3>
+    </div>
+    <div class="card-body">
+        <div id="results-container">
+            <!-- Results will be rendered here -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='js/modules/multiturn.js') }}"></script>
+{% endblock %}

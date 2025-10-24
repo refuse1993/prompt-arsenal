@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Prompt Arsenal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: var(--spacing-sm);">⚔️ Prompt Arsenal Dashboard</h1>
+    <p style="color: var(--text-secondary); font-size: 1.125rem;">AI Security Testing Framework - 통합 대시보드</p>
+</div>
+
+<div class="mt-2" id="stats-container">
+    <!-- Stats will be loaded here -->
+</div>
+
+<div class="grid grid-2 mt-2">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📊 Recent Activity</h3>
+        </div>
+        <div class="card-body" id="activity-container">
+            <!-- Activity will be loaded here -->
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">📈 Success Rates</h3>
+        </div>
+        <div class="card-body" id="success-rates-container">
+            <!-- Success rates will be loaded here -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script type="module" src="{{ url_for('static', filename='js/modules/home.js') }}"></script>
+{% endblock %}
