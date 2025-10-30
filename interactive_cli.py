@@ -8,6 +8,7 @@ AI Security Red Teaming Framework
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.prompt import Prompt, Confirm
 from rich import print as rprint
 import asyncio
 import os
@@ -517,58 +518,34 @@ class PromptArsenal:
     def show_menu(self):
         """Display main menu"""
         menu = """
+[bold cyan]⚙️  SETTINGS[/bold cyan]
+  [green]s[/green]. API 프로필 관리
+  [green]j[/green]. Judge 프로필 관리
+
 [bold yellow]🚀 QUICK START[/bold yellow]
-  [green]Q[/green]. ⚡ 5분 완성 튜토리얼 (신규 사용자 추천!) ✨
+  [green]Q[/green]. ⚡ 5분 완성 튜토리얼
 
-[bold cyan]🎯 ARSENAL (무기고)[/bold cyan]
-  [green]1[/green]. GitHub 데이터셋 가져오기 (텍스트)
-  [green]2[/green]. 텍스트 프롬프트 추가
-  [green]3[/green]. 멀티모달 공격 생성
-  [green]4[/green]. 프롬프트 관리
-  [green]cc[/green]. 🌐 커뮤니티 프롬프트 수집 (DC인사이드)
+[bold cyan]📦 ARSENAL[/bold cyan]
+  [green]1[/green]. 텍스트 프롬프트 관리
+  [green]2[/green]. 멀티모달 공격 생성
+  [green]3[/green]. GitHub 데이터셋 가져오기
+  [green]4[/green]. DC인사이드 커뮤니티 수집
 
-[bold cyan]🔍 RECON (정찰)[/bold cyan]
-  [green]5[/green]. 텍스트 프롬프트 검색
-  [green]6[/green]. 멀티모달 무기고 검색
-  [green]7[/green]. 카테고리/통계 조회
-  [green]r[/green]. 공격 테스트 결과 조회 (텍스트+멀티모달)
+[bold cyan]🔍 RECON[/bold cyan]
+  [green]5[/green]. 프롬프트 검색
+  [green]6[/green]. 공격 결과 조회
+  [green]7[/green]. 통계 대시보드
 
-[bold cyan]⚔️  ATTACK (공격)[/bold cyan]
-  [green]8[/green]. 텍스트 LLM 테스트
-  [green]9[/green]. 멀티모달 LLM 테스트
-  [green]g[/green]. GARAK 보안 스캔
+[bold cyan]⚔️  ATTACK[/bold cyan]
+  [green]8[/green]. LLM 공격 테스트
+  [green]9[/green]. 멀티턴 캠페인
+  [green]A[/green]. 고급 공격 메뉴 →
 
-[bold magenta]🧪 ADVANCED (고급 Adversarial 공격)[/bold magenta]
-  [green]A[/green]. 🎯 Foolbox 이미지 공격 (FGSM, PGD, C&W, DeepFool)
-  [green]U[/green]. 🔬 ART Universal Perturbation
-  [green]D[/green]. 🎭 Deepfake 생성 (Face Swap)
-  [green]V[/green]. 🎤 음성 복제 (Voice Cloning)
-  [green]X[/green]. 🌐 크로스 모달 복합 공격
-  [green]P[/green]. 🤖 GPT-4o Attack Planner (AI 기반 공격 전략 수립)
-  [green]E[/green]. 🎯 Model Extraction (모델 추출 공격) ⭐ 신규
-  [green]B[/green]. ☠️  Data Poisoning (데이터 오염 공격) ⭐ 신규
-  [green]S[/green]. 🏆 SpyLab Backdoor (IEEE SaTML 2024 우승팀 전략) ⭐ 신규
+[bold yellow]🛡️  SECURITY & CTF[/bold yellow]
+  [green]S[/green]. 보안 스캔 메뉴 →
+  [green]C[/green]. CTF 자동 풀이 →
 
-[bold red]🔄 MULTI-TURN (멀티턴 공격)[/bold red]
-  [green]0[/green]. Multi-Turn 공격 캠페인 (Visual Storytelling, Crescendo, Roleplay)
-  [green]c[/green]. 캠페인 목록 및 결과 조회
-
-[bold yellow]🛡️  SECURITY (보안 스캔)[/bold yellow]
-  [green]a[/green]. 코드 취약점 스캔 (CWE 기반)
-  [green]v[/green]. 스캔 결과 조회
-  [green]y[/green]. 시스템 취약점 스캔 (Docker/K8s/포트/CVE)
-  [green]n[/green]. 시스템 스캔 이력
-
-[bold magenta]🚩 CTF (자동 풀이)[/bold magenta]
-  [green]f[/green]. CTF 문제 추가
-  [green]w[/green]. CTF 대회 크롤링 (자동 수집)
-  [green]t[/green]. CTF 자동 풀이 실행
-  [green]k[/green]. CTF 문제 목록 및 통계
-  [green]C[/green]. 🎯 Adversarial ML CTF Solver (자동 해결)
-
-[bold cyan]⚙️  SETTINGS (설정)[/bold cyan]
-  [green]s[/green]. API 프로필 관리 (LLM, Image/Audio/Video 생성)
-  [green]j[/green]. Judge 프로필 관리 (LLM Judge)
+[bold cyan]📤 EXPORT[/bold cyan]
   [green]e[/green]. 결과 내보내기
   [green]d[/green]. 데이터 삭제
 
@@ -6409,9 +6386,20 @@ class PromptArsenal:
 
         judge_profile = self.config.config['judge_profiles'][judge_name]
 
+        # Check if selected model supports multimodal
+        model_name = profile['model'].lower()
+        is_multimodal_capable = any([
+            'vision' in model_name,
+            'gpt-4o' in model_name and 'audio' not in model_name and 'tts' not in model_name,
+            'gpt-4-turbo' in model_name and 'preview' in model_name,
+            'claude-3' in model_name,
+            'claude-4' in model_name,
+            'gemini' in model_name and ('pro' in model_name or 'flash' in model_name) and 'tts' not in model_name
+        ])
+
         # Initialize components
         from multimodal.llm_client import LLMClient, MultimodalLLMClient
-        from multimodal.image_generator import ImageGenerator, MockImageGenerator
+        from multimodal.image_generator import ImageGenerator
         from multiturn import MultiTurnOrchestrator, MultiTurnScorer
         from multiturn.strategies import (
             VisualStorytellingStrategy,
@@ -6450,14 +6438,19 @@ class PromptArsenal:
 
         # Create strategy
         if strategy_name == "visual_storytelling":
+            # Check multimodal capability
+            if not is_multimodal_capable:
+                console.print(f"[yellow]⚠️  선택한 모델 ({profile['model']})은 멀티모달을 지원하지 않습니다.[/yellow]")
+                console.print("[yellow]텍스트 전용 전략 (Crescendo, Roleplay)을 사용하거나 멀티모달 모델을 선택하세요.[/yellow]")
+                return
+
             # Image generation profile 선택
             console.print("\n[bold yellow]Image Generation 프로필:[/bold yellow]")
             img_profiles = self.config.get_all_profiles(profile_type="image_generation")
 
             if not img_profiles:
-                console.print("[yellow]⚠️  이미지 생성 프로필이 없습니다. Mock 생성기를 사용합니다.[/yellow]")
-                console.print("[dim]💡 Tip: 's' 메뉴에서 이미지 생성 프로필을 추가할 수 있습니다.[/dim]")
-                image_gen = MockImageGenerator()
+                console.print("[red]⚠️  이미지 생성 프로필이 없습니다. 먼저 's' 메뉴에서 이미지 생성 프로필을 추가하세요.[/red]")
+                return
             else:
                 table = Table(title="Image Generation Profiles")
                 table.add_column("No.", style="magenta", justify="right")
@@ -6507,14 +6500,19 @@ class PromptArsenal:
             )
 
         elif strategy_name == "improved_visual_storytelling":
+            # Check multimodal capability
+            if not is_multimodal_capable:
+                console.print(f"[yellow]⚠️  선택한 모델 ({profile['model']})은 멀티모달을 지원하지 않습니다.[/yellow]")
+                console.print("[yellow]텍스트 전용 전략 (Crescendo, Roleplay)을 사용하거나 멀티모달 모델을 선택하세요.[/yellow]")
+                return
+
             # Image generation profile 선택 (visual_storytelling과 동일)
             console.print("\n[bold yellow]Image Generation 프로필:[/bold yellow]")
             img_profiles = self.config.get_all_profiles(profile_type="image_generation")
 
             if not img_profiles:
-                console.print("[yellow]⚠️  이미지 생성 프로필이 없습니다. Mock 생성기를 사용합니다.[/yellow]")
-                console.print("[dim]💡 Tip: 's' 메뉴에서 이미지 생성 프로필을 추가할 수 있습니다.[/dim]")
-                image_gen = MockImageGenerator()
+                console.print("[red]⚠️  이미지 생성 프로필이 없습니다. 먼저 's' 메뉴에서 이미지 생성 프로필을 추가하세요.[/red]")
+                return
             else:
                 table = Table(title="Image Generation Profiles")
                 table.add_column("No.", style="magenta", justify="right")
@@ -6576,12 +6574,27 @@ class PromptArsenal:
             )
 
         elif strategy_name == "figstep":
+            # Check multimodal capability for FigStep (requires image input)
+            if not is_multimodal_capable:
+                console.print(f"[yellow]⚠️  선택한 모델 ({profile['model']})은 멀티모달을 지원하지 않습니다.[/yellow]")
+                console.print("[yellow]텍스트 전용 전략 (Crescendo, Roleplay)을 사용하거나 멀티모달 모델을 선택하세요.[/yellow]")
+                return
             strategy = FigStepStrategy()
 
         elif strategy_name == "mml_attack":
+            # Check multimodal capability for MML Attack (cross-modal)
+            if not is_multimodal_capable:
+                console.print(f"[yellow]⚠️  선택한 모델 ({profile['model']})은 멀티모달을 지원하지 않습니다.[/yellow]")
+                console.print("[yellow]텍스트 전용 전략 (Crescendo, Roleplay)을 사용하거나 멀티모달 모델을 선택하세요.[/yellow]")
+                return
             strategy = MMLAttackStrategy()
 
         elif strategy_name == "visual_roleplay":
+            # Check multimodal capability for Visual-RolePlay (image-based)
+            if not is_multimodal_capable:
+                console.print(f"[yellow]⚠️  선택한 모델 ({profile['model']})은 멀티모달을 지원하지 않습니다.[/yellow]")
+                console.print("[yellow]텍스트 전용 전략 (Crescendo, Roleplay)을 사용하거나 멀티모달 모델을 선택하세요.[/yellow]")
+                return
             strategy = VisualRolePlayStrategy()
 
         # Create orchestrator
@@ -6786,6 +6799,107 @@ class PromptArsenal:
 
             console.print("\n" + "="*80)
 
+    def export_results(self):
+        """결과 내보내기"""
+        console.print("\n[cyan]📤 결과 내보내기[/cyan]")
+
+        export_type = Prompt.ask(
+            "내보낼 데이터 타입",
+            choices=["text", "multimodal", "all"],
+            default="all"
+        )
+
+        # Get results from database
+        if export_type in ["text", "all"]:
+            text_results = self.db.get_all_test_results(limit=10000)
+            if text_results:
+                console.print(f"[green]✓[/green] 텍스트 테스트 결과: {len(text_results)}개")
+
+        if export_type in ["multimodal", "all"]:
+            multimodal_results = self.db.get_all_multimodal_test_results(limit=10000)
+            if multimodal_results:
+                console.print(f"[green]✓[/green] 멀티모달 테스트 결과: {len(multimodal_results)}개")
+
+        # Select export format
+        export_format = Prompt.ask(
+            "내보내기 형식",
+            choices=["csv", "json", "markdown"],
+            default="json"
+        )
+
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Export based on type
+        if export_type in ["text", "all"] and text_results:
+            filename = f"text_results_{timestamp}.{export_format}"
+            self._export_test_results(text_results, filename, export_format, 'text')
+
+        if export_type in ["multimodal", "all"] and multimodal_results:
+            filename = f"multimodal_results_{timestamp}.{export_format}"
+            self._export_test_results(multimodal_results, filename, export_format, 'multimodal')
+
+        console.print("[green]✓ 내보내기 완료![/green]")
+
+    def delete_data(self):
+        """데이터 삭제"""
+        console.print("\n[yellow]⚠️  데이터 삭제[/yellow]")
+
+        delete_type = Prompt.ask(
+            "삭제할 데이터 타입",
+            choices=["prompts", "media", "test_results", "all", "cancel"],
+            default="cancel"
+        )
+
+        if delete_type == "cancel":
+            console.print("[cyan]취소되었습니다.[/cyan]")
+            return
+
+        # Confirmation
+        if delete_type == "all":
+            if not Confirm.ask("[red]⚠️  모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다![/red]"):
+                console.print("[cyan]취소되었습니다.[/cyan]")
+                return
+        else:
+            if not Confirm.ask(f"[yellow]{delete_type} 데이터를 삭제하시겠습니까?[/yellow]"):
+                console.print("[cyan]취소되었습니다.[/cyan]")
+                return
+
+        # Execute deletion
+        import sqlite3
+        conn = sqlite3.connect(self.db.db_path)
+        cursor = conn.cursor()
+
+        try:
+            if delete_type == "prompts" or delete_type == "all":
+                cursor.execute("DELETE FROM prompts")
+                console.print("[green]✓[/green] 프롬프트 데이터 삭제 완료")
+
+            if delete_type == "media" or delete_type == "all":
+                cursor.execute("DELETE FROM media_arsenal")
+                console.print("[green]✓[/green] 미디어 데이터 삭제 완료")
+
+            if delete_type == "test_results" or delete_type == "all":
+                cursor.execute("DELETE FROM test_results")
+                cursor.execute("DELETE FROM multimodal_test_results")
+                console.print("[green]✓[/green] 테스트 결과 데이터 삭제 완료")
+
+            if delete_type == "all":
+                cursor.execute("DELETE FROM cross_modal_combinations")
+                cursor.execute("DELETE FROM campaigns")
+                cursor.execute("DELETE FROM campaign_results")
+                console.print("[green]✓[/green] 모든 데이터 삭제 완료")
+
+            conn.commit()
+            console.print("[green]✓ 삭제 완료![/green]")
+
+        except Exception as e:
+            console.print(f"[red]삭제 중 오류 발생: {e}[/red]")
+            conn.rollback()
+
+        finally:
+            conn.close()
+
     def run(self):
         """Main application loop"""
         self.show_banner()
@@ -6800,114 +6914,156 @@ class PromptArsenal:
                     from cli.quick_start import run_quick_start
                     asyncio.run(run_quick_start(self.db, self.config))
                 elif choice == '1':
-                    self.arsenal_github_import()
+                    self.arsenal_manage_prompts()  # 텍스트 프롬프트 관리 (추가/수정/삭제)
                 elif choice == '2':
-                    self.arsenal_add_prompt()
+                    self.arsenal_multimodal_generate()  # 멀티모달 공격 생성
                 elif choice == '3':
-                    self.arsenal_multimodal_generate()
+                    self.arsenal_github_import()  # GitHub 데이터셋 가져오기
                 elif choice == '4':
-                    self.arsenal_manage_prompts()
-                elif choice == 'cc':
-                    # Community Crawler (커뮤니티 프롬프트 수집)
+                    # DC인사이드 커뮤니티 수집
                     from text.community_crawler import community_import_workflow
                     asyncio.run(community_import_workflow(self.db, self.config))
                 elif choice == '5':
-                    self.recon_search_prompts()
+                    self.recon_search_prompts()  # 프롬프트 검색
                 elif choice == '6':
-                    self.recon_search_media()
+                    self.recon_multimodal_test_results()  # 공격 결과 조회
                 elif choice == '7':
-                    self.recon_stats()
-                elif choice == 'r':
-                    self.recon_multimodal_test_results()
+                    self.recon_stats()  # 통계 대시보드
                 elif choice == '8':
-                    self.attack_text_llm()
+                    # LLM 공격 테스트 (텍스트 + 멀티모달 통합)
+                    console.print("\n[cyan]LLM 공격 테스트[/cyan]")
+                    console.print("  1. 텍스트 프롬프트 테스트")
+                    console.print("  2. 멀티모달 공격 테스트")
+                    test_choice = Prompt.ask("선택", choices=["1", "2"], default="1")
+                    if test_choice == "1":
+                        self.attack_text_llm()
+                    else:
+                        asyncio.run(self.attack_multimodal_llm())
                 elif choice == '9':
-                    asyncio.run(self.attack_multimodal_llm())
-                elif choice == 'g':
-                    self.attack_garak_scan()
+                    # 멀티턴 캠페인
+                    console.print("\n[cyan]멀티턴 공격 캠페인[/cyan]")
+                    console.print("  1. 새 캠페인 시작")
+                    console.print("  2. 캠페인 목록 및 결과")
+                    camp_choice = Prompt.ask("선택", choices=["1", "2"], default="1")
+                    if camp_choice == "1":
+                        asyncio.run(self.multiturn_campaign())
+                    else:
+                        self.multiturn_list_campaigns()
                 elif choice == 'A':
-                    # Foolbox 고급 이미지 공격
-                    if ADVANCED_ATTACKS_AVAILABLE:
-                        foolbox_attack_menu(self.db)
-                    else:
-                        console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다. requirements.txt의 추가 패키지를 설치하세요.[/yellow]")
-                elif choice == 'U':
-                    # ART Universal Perturbation
-                    if ADVANCED_ATTACKS_AVAILABLE:
-                        art_universal_perturbation_menu(self.db)
-                    else:
-                        console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
-                elif choice == 'D':
-                    # Deepfake 생성
-                    if ADVANCED_ATTACKS_AVAILABLE:
-                        deepfake_menu(self.db)
-                    else:
-                        console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
-                elif choice == 'V':
-                    # 음성 복제
-                    if ADVANCED_ATTACKS_AVAILABLE:
-                        voice_cloning_menu(self.db)
-                    else:
-                        console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
-                elif choice == 'X':
-                    # 크로스 모달 복합 공격
-                    if ADVANCED_ATTACKS_AVAILABLE:
-                        cross_modal_menu(self.db)
-                    else:
-                        console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
-                elif choice == 'P':
-                    # GPT-4o Attack Planner
-                    asyncio.run(self._gpt4o_attack_planner())
-                elif choice == 'E':
-                    # Model Extraction
-                    if EXTRACTION_MENU_AVAILABLE:
-                        model_extraction_menu(self.db, self.config)
-                    else:
-                        console.print("[yellow]Model Extraction 모듈을 사용할 수 없습니다.[/yellow]")
-                elif choice == 'B':
-                    # Data Poisoning
-                    if EXTRACTION_MENU_AVAILABLE:
-                        data_poisoning_menu(self.db)
-                    else:
-                        console.print("[yellow]Data Poisoning 모듈을 사용할 수 없습니다.[/yellow]")
+                    # 고급 공격 서브메뉴
+                    console.print("\n[bold cyan]⚔️  고급 공격 메뉴[/bold cyan]")
+                    console.print("  1. Foolbox 이미지 공격")
+                    console.print("  2. ART Universal Perturbation")
+                    console.print("  3. Deepfake 생성")
+                    console.print("  4. 음성 복제")
+                    console.print("  5. 크로스 모달 복합 공격")
+                    console.print("  6. GPT-4o Attack Planner")
+                    console.print("  7. Model Extraction")
+                    console.print("  8. Data Poisoning")
+                    console.print("  b. 뒤로 가기")
+
+                    adv_choice = Prompt.ask("선택", choices=["1", "2", "3", "4", "5", "6", "7", "8", "b"], default="b")
+
+                    if adv_choice == "b":
+                        continue
+                    elif adv_choice == "1":
+                        if ADVANCED_ATTACKS_AVAILABLE:
+                            foolbox_attack_menu(self.db)
+                        else:
+                            console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다. requirements.txt의 추가 패키지를 설치하세요.[/yellow]")
+                    elif adv_choice == "2":
+                        if ADVANCED_ATTACKS_AVAILABLE:
+                            art_universal_perturbation_menu(self.db)
+                        else:
+                            console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
+                    elif adv_choice == "3":
+                        if ADVANCED_ATTACKS_AVAILABLE:
+                            deepfake_menu(self.db)
+                        else:
+                            console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
+                    elif adv_choice == "4":
+                        if ADVANCED_ATTACKS_AVAILABLE:
+                            voice_cloning_menu(self.db)
+                        else:
+                            console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
+                    elif adv_choice == "5":
+                        if ADVANCED_ATTACKS_AVAILABLE:
+                            cross_modal_menu(self.db)
+                        else:
+                            console.print("[yellow]고급 공격 모듈을 사용할 수 없습니다.[/yellow]")
+                    elif adv_choice == "6":
+                        asyncio.run(self._gpt4o_attack_planner())
+                    elif adv_choice == "7":
+                        if EXTRACTION_MENU_AVAILABLE:
+                            model_extraction_menu(self.db, self.config)
+                        else:
+                            console.print("[yellow]Model Extraction 모듈을 사용할 수 없습니다.[/yellow]")
+                    elif adv_choice == "8":
+                        if EXTRACTION_MENU_AVAILABLE:
+                            data_poisoning_menu(self.db)
+                        else:
+                            console.print("[yellow]Data Poisoning 모듈을 사용할 수 없습니다.[/yellow]")
+
                 elif choice == 'S':
-                    # SpyLab Backdoor
-                    if EXTRACTION_MENU_AVAILABLE:
-                        spylab_backdoor_menu(self.db, self.config)
-                    else:
-                        console.print("[yellow]SpyLab Backdoor 모듈을 사용할 수 없습니다.[/yellow]")
-                elif choice == '0':
-                    asyncio.run(self.multiturn_campaign())
-                elif choice == 'c':
-                    self.multiturn_view_campaigns()
-                elif choice == 'a':
-                    asyncio.run(self.security_code_scanner())
-                elif choice == 'v':
-                    self.security_view_results()
-                elif choice == 'y':
-                    asyncio.run(self.security_system_scan())
-                elif choice == 'n':
-                    self.security_system_scan_history()
-                elif choice == 'f':
-                    self.ctf_add_challenge()
-                elif choice == 'w':
-                    asyncio.run(self.ctf_crawl_competition())
-                elif choice == 't':
-                    asyncio.run(self.ctf_auto_solve())
-                elif choice == 'k':
-                    self.ctf_list_and_stats()
+                    # 보안 스캔 서브메뉴
+                    console.print("\n[bold yellow]🛡️  보안 스캔 메뉴[/bold yellow]")
+                    console.print("  1. Garak 보안 스캔")
+                    console.print("  2. 코드 보안 스캔")
+                    console.print("  3. 스캔 결과 조회")
+                    console.print("  4. 시스템 취약점 스캔")
+                    console.print("  5. 스캔 히스토리")
+                    console.print("  6. SpyLab Backdoor")
+                    console.print("  b. 뒤로 가기")
+
+                    sec_choice = Prompt.ask("선택", choices=["1", "2", "3", "4", "5", "6", "b"], default="b")
+
+                    if sec_choice == "b":
+                        continue
+                    elif sec_choice == "1":
+                        self.attack_garak_scan()
+                    elif sec_choice == "2":
+                        asyncio.run(self.security_code_scanner())
+                    elif sec_choice == "3":
+                        self.security_view_results()
+                    elif sec_choice == "4":
+                        asyncio.run(self.security_system_scan())
+                    elif sec_choice == "5":
+                        self.security_system_scan_history()
+                    elif sec_choice == "6":
+                        if EXTRACTION_MENU_AVAILABLE:
+                            spylab_backdoor_menu(self.db, self.config)
+                        else:
+                            console.print("[yellow]SpyLab Backdoor 모듈을 사용할 수 없습니다.[/yellow]")
+
                 elif choice.upper() == 'C':
-                    # Adversarial ML CTF Solver
-                    try:
-                        from cli.ctf_menu import ctf_solver_menu
-                        ctf_solver_menu(self.db)
-                    except ImportError as e:
-                        console.print(f"[red]CTF Solver를 사용할 수 없습니다: {e}[/red]")
-                        console.print("[yellow]Foolbox와 ART를 설치하세요: pip install foolbox adversarial-robustness-toolbox[/yellow]")
+                    # CTF 서브메뉴
+                    console.print("\n[bold yellow]🏆 CTF 자동 풀이 메뉴[/bold yellow]")
+                    console.print("  1. CTF 대회 크롤링")
+                    console.print("  2. CTF 문제 자동 풀이")
+                    console.print("  3. CTF 문제 추가")
+                    console.print("  4. CTF 목록 및 통계")
+                    console.print("  b. 뒤로 가기")
+
+                    ctf_choice = Prompt.ask("선택", choices=["1", "2", "3", "4", "b"], default="b")
+
+                    if ctf_choice == "b":
+                        continue
+                    elif ctf_choice == "1":
+                        asyncio.run(self.ctf_crawl_competition())
+                    elif ctf_choice == "2":
+                        asyncio.run(self.ctf_auto_solve())
+                    elif ctf_choice == "3":
+                        self.ctf_add_challenge()
+                    elif ctf_choice == "4":
+                        self.ctf_list_and_stats()
                 elif choice == 's':
                     self.settings_api_profiles()
                 elif choice == 'j':
                     self.settings_judge_profiles()
+                elif choice == 'e':
+                    self.export_results()
+                elif choice == 'd':
+                    self.delete_data()
                 elif choice == 'h':
                     self.show_help()
                 elif choice == 'q':
