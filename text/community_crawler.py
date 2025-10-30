@@ -87,6 +87,11 @@ class CommunityCrawler:
 
                         # 본문 추출
                         content_div = article_soup.select_one('div.write_div')
+
+                        # 날짜 추출
+                        date_elem = article_soup.select_one('.gall_date')
+                        date_str = date_elem.text.strip() if date_elem else "Unknown"
+
                         if content_div:
                             content = content_div.get_text(separator="\n", strip=True)
 
@@ -94,7 +99,8 @@ class CommunityCrawler:
                                 'title': title,
                                 'content': content,
                                 'url': article_url,
-                                'source': 'dcinside'
+                                'source': 'dcinside',
+                                'date': date_str
                             })
 
                         time.sleep(0.5)  # Rate limiting
@@ -161,7 +167,8 @@ class CommunityCrawler:
         if filtered_posts:
             console.print("\n[cyan]필터링된 게시글 샘플:[/cyan]")
             for i, post in enumerate(filtered_posts[:3], 1):
-                console.print(f"  {i}. {post['title']}")
+                date_str = post.get('date', 'Unknown')
+                console.print(f"  {i}. [{date_str}] {post['title']}")
 
         return filtered_posts
 
@@ -450,6 +457,34 @@ async def community_import_workflow(db: ArsenalDB, config: Config):
         return
 
     console.print(f"\n[green]총 {len(all_posts)}개 게시글 수집 완료[/green]")
+
+    # 3-1. 날짜별 정보 표시
+    if all_posts:
+        from rich.table import Table
+        date_table = Table(title="수집된 게시글 날짜 분포", show_header=True)
+        date_table.add_column("날짜", style="cyan")
+        date_table.add_column("게시글 수", style="yellow", justify="right")
+
+        # 날짜별 카운트
+        from collections import Counter
+        date_counts = Counter(post.get('date', 'Unknown') for post in all_posts)
+
+        for date, count in sorted(date_counts.items(), reverse=True)[:10]:  # 최근 10개
+            date_table.add_row(date, str(count))
+
+        console.print(date_table)
+
+        # 날짜 필터링 옵션
+        console.print("\n[dim]특정 날짜만 수집하시겠습니까? (전체 수집하려면 Enter)[/dim]")
+        filter_date = Prompt.ask("날짜 (예: 2025.01.30)", default="")
+
+        if filter_date:
+            filtered_by_date = [p for p in all_posts if p.get('date') == filter_date]
+            if filtered_by_date:
+                all_posts = filtered_by_date
+                console.print(f"[green]날짜 필터링 완료: {len(all_posts)}개 게시글[/green]")
+            else:
+                console.print(f"[yellow]'{filter_date}' 날짜의 게시글이 없습니다. 전체를 사용합니다.[/yellow]")
 
     # 4. 1차 키워드 필터링
     filtered_posts = crawler.filter_posts_by_keywords(all_posts)
