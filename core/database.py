@@ -2631,8 +2631,8 @@ class ArsenalDB:
         """Get all CTF test results"""
         return self.get_ctf_test_results()
 
-    def get_multimodal_test_results(self, media_id: int) -> List[Dict]:
-        """Get multimodal test results for a media"""
+    def get_multimodal_test_results_by_media(self, media_id: int) -> List[Dict]:
+        """Get multimodal test results for a specific media"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()

@@ -165,7 +165,7 @@ def delete_media(media_id):
 @multimodal_bp.route('/test-results/<int:media_id>', methods=['GET'])
 def get_test_results(media_id):
     """Get test results for media"""
-    results = db.get_multimodal_test_results(media_id)
+    results = db.get_multimodal_test_results_by_media(media_id)
 
     return jsonify({
         'success': True,
