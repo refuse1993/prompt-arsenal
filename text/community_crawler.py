@@ -355,18 +355,18 @@ JSON 형식으로 응답:
                 console.print(f"[bold cyan]프롬프트 #{idx}/{len(prompts)}[/bold cyan]")
                 console.print("=" * 70)
 
-                console.print(f"[yellow]카테고리:[/yellow] {category}", markup=False)
-                console.print(f"[yellow]길이:[/yellow] {payload_len} chars")
-                console.print(f"[yellow]설명:[/yellow] {description or 'N/A'}", markup=False)
-                console.print(f"[yellow]태그:[/yellow] {tags or 'N/A'}", markup=False)
-                console.print(f"[yellow]출처:[/yellow] {prompt.get('source', 'community')}", markup=False)
+                console.print(f"카테고리: {category}")
+                console.print(f"길이: {payload_len} chars")
+                console.print(f"설명: {description or 'N/A'}")
+                console.print(f"태그: {tags or 'N/A'}")
+                console.print(f"출처: {prompt.get('source', 'community')}")
 
                 # 전체 내용 표시
-                console.print(f"\n[cyan]{'─' * 70}")
+                console.print(f"\n{'─' * 70}")
                 console.print("전체 내용:")
-                console.print(f"{'─' * 70}[/cyan]")
-                console.print(payload, markup=False)  # Rich 마크업 비활성화
-                console.print(f"[cyan]{'─' * 70}[/cyan]\n")
+                console.print(f"{'─' * 70}")
+                console.print(payload)
+                console.print(f"{'─' * 70}\n")
 
                 # 저장 여부 확인
                 if confirm:
