@@ -2151,11 +2151,10 @@ MIT License - 자유롭게 사용, 수정, 배포할 수 있습니다.
 
 ### v7.0 (계획 중)
 - [ ] **Dynamic Analysis**: 런타임 코드 분석 추가
-- [ ] **API Fuzzing**: 자동 API 엔드포인트 테스팅
+- [x] **API Fuzzing**: Custom Endpoint 기반 자동 테스팅 ✅
 - [ ] **LLM Fine-tuning**: 공격 성공률 향상을 위한 모델 미세조정
 - [ ] **Distributed Campaigns**: 다중 타겟 동시 공격
 - [ ] **Advanced Analytics**: 성공 패턴 ML 분석
-- [ ] **CTF Auto-Solver**: 완전 자동 풀이 시스템 (현재 70% → 95% 목표)
 
 ---
 
