@@ -228,7 +228,7 @@ class CommunityCrawler:
                 ) as progress:
                     task = progress.add_task(f"프롬프트 추출 중...", total=len(posts))
 
-                    for post in posts:
+                    for post_idx, post in enumerate(posts, 1):
                         try:
                             # LLM에게 프롬프트 추출 요청
                             system_prompt = """당신은 AI 보안 연구용 프롬프트 수집 전문가입니다.
@@ -240,35 +240,38 @@ class CommunityCrawler:
 4. 창작/글쓰기용 프롬프트 템플릿
 5. 성인 콘텐츠 생성용 프롬프트 (연구용)
 
-**중요**:
+**중요 규칙**:
 - 모든 프롬프트는 보안 연구 목적으로 수집됩니다
 - 성인 콘텐츠나 유해 콘텐츠 프롬프트도 연구 대상입니다
-- 내용이 길면 핵심 부분만 요약하여 추출하세요
+- **전체 프롬프트를 하나의 payload로 추출** (쪼개지 말 것!)
+- 길이 제한 없음: 전체 내용을 그대로 포함
 - 프롬프트가 명확하게 보이면 반드시 추출하세요
 
 JSON 형식으로 응답:
 {
   "prompts": [
     {
-      "payload": "프롬프트 핵심 내용 (길면 요약)",
-      "category": "jailbreak|prompt_injection|template|conversation|other",
-      "description": "프롬프트 용도와 특징",
+      "payload": "프롬프트 전체 내용 (원본 그대로, 길이 제한 없음)",
+      "category": "jailbreak|prompt_injection|template|roleplay|other",
+      "description": "프롬프트 용도와 특징 (간략하게)",
       "tags": "태그1,태그2,태그3"
     }
   ]
 }
 
 프롬프트가 없으면 빈 배열 반환.
+프롬프트가 여러 개면 각각 별도 항목으로 추출.
 """
 
                             user_prompt = f"""게시글 제목: {post['title']}
 
 게시글 내용:
-{post['content'][:3000]}
+{post['content'][:5000]}
 
 출처: {post['url']}
 
-위 게시글에서 LLM 프롬프트를 추출하세요."""
+위 게시글에서 LLM 프롬프트를 추출하세요.
+긴 프롬프트라도 전체를 하나의 payload로 추출하세요."""
 
                             response = client.chat.completions.create(
                                 model=model,
@@ -278,15 +281,31 @@ JSON 형식으로 응답:
                                 ],
                                 response_format={"type": "json_object"},
                                 temperature=0.3,
-                                max_tokens=2000
+                                max_tokens=8000,  # 긴 프롬프트를 위해 증가
+                                timeout=30.0  # 30초 타임아웃
                             )
 
                             # 응답 파싱
                             import json
-                            result = json.loads(response.choices[0].message.content)
+                            raw_response = response.choices[0].message.content
 
+                            # 🔍 DEBUG: 원본 LLM 응답 저장
+                            debug_file = Path("logs") / f"llm_response_{post_idx}.json"
+                            debug_file.parent.mkdir(exist_ok=True)
+                            with open(debug_file, 'w', encoding='utf-8') as f:
+                                f.write(raw_response)
+                            console.print(f"[dim]DEBUG: 응답 저장 → {debug_file}[/dim]")
+
+                            result = json.loads(raw_response)
+
+                            # 🔍 DEBUG: LLM 응답 로깅
                             if result.get('prompts'):
-                                for prompt_data in result['prompts']:
+                                console.print(f"\n[magenta]📊 LLM이 추출한 프롬프트 수: {len(result['prompts'])}[/magenta]")
+                                for idx, prompt_data in enumerate(result['prompts'], 1):
+                                    payload_len = len(prompt_data.get('payload', ''))
+                                    console.print(f"  [{idx}] 길이: {payload_len} chars | 카테고리: {prompt_data.get('category')}")
+                                    console.print(f"      내용 미리보기: {prompt_data.get('payload', '')[:100]}...")
+
                                     prompt_data['source'] = f"{post['source']}: {post['url']}"
                                     extracted_prompts.append(prompt_data)
 
@@ -329,11 +348,19 @@ JSON 형식으로 응답:
 
         console.print(f"\n[cyan]DB에 프롬프트 저장 중...[/cyan]")
 
-        for prompt in prompts:
+        for idx, prompt in enumerate(prompts, 1):
             try:
+                payload = prompt['payload']
+                payload_len = len(payload)
+
+                # 🔍 DEBUG: 저장 전 로깅
+                console.print(f"\n[yellow]💾 [{idx}] 저장 시도 - 길이: {payload_len} chars[/yellow]")
+                console.print(f"    카테고리: {prompt.get('category', 'other')}")
+                console.print(f"    미리보기: {payload[:150]}...")
+
                 prompt_id = self.db.insert_prompt(
                     category=prompt.get('category', 'other'),
-                    payload=prompt['payload'],
+                    payload=payload,
                     description=prompt.get('description', ''),
                     source=prompt.get('source', 'community'),
                     tags=prompt.get('tags', '')
@@ -341,9 +368,10 @@ JSON 형식으로 응답:
 
                 if prompt_id:
                     saved_count += 1
+                    console.print(f"    [green]✅ 저장 완료 (ID: {prompt_id})[/green]")
 
             except Exception as e:
-                console.print(f"[yellow]저장 실패: {e}[/yellow]")
+                console.print(f"[red]❌ 저장 실패: {e}[/red]")
                 continue
 
         console.print(f"[green]✅ {saved_count}개 프롬프트 저장 완료[/green]")
