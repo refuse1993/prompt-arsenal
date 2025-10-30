@@ -12,6 +12,7 @@ AI 모델의 보안 취약점을 테스트하고 적대적 공격(Adversarial At
 - 🔍 **Garak 보안 스캔 통합**: NVIDIA Garak을 통한 자동화된 취약점 스캔
 - 🎭 **멀티모달 공격**: 이미지, 오디오, 비디오 적대적 공격 생성
 - 📊 **성공률 기반 학습**: 테스트 결과를 DB에 저장하고 분석
+- 🌐 **커뮤니티 크롤러**: DC인사이드에서 AI 프롬프트 자동 수집 (2단계 필터링)
 
 ### 🆕 고급 기능 (새로 추가)
 - 🧪 **Foolbox 통합**: 20+ 그래디언트 기반 고급 이미지 공격 (FGSM, PGD, C&W, DeepFool 등)
@@ -33,6 +34,7 @@ prompt_arsenal/
 ├── text/                      # 텍스트 프롬프트
 │   ├── llm_tester.py          # 비동기 LLM 테스팅
 │   ├── github_importer.py     # GitHub 데이터셋 임포트
+│   ├── community_crawler.py   # 커뮤니티 프롬프트 크롤러 (DC인사이드)
 │   └── payload_utils.py       # 페이로드 인코딩/생성/분석
 │
 ├── multimodal/                # 멀티모달 공격
@@ -143,7 +145,51 @@ result = await tester.test_prompt_with_judge(
 )
 ```
 
-### 3. 🆕 Foolbox 고급 공격
+### 3. 커뮤니티 크롤러 (CommunityCrawler)
+
+**DC인사이드에서 AI 프롬프트 자동 수집 (2단계 필터링)**
+
+```python
+from text.community_crawler import CommunityCrawler
+from core.database import ArsenalDB
+from core.config import Config
+
+db = ArsenalDB("arsenal.db")
+config = Config("config.json")
+crawler = CommunityCrawler(db, config)
+
+# 1단계: DC인사이드 크롤링
+posts = crawler.crawl_dcinside(gallery_id="ai", pages=10)
+# → 10페이지에서 약 40개 게시글 수집
+
+# 2단계: 키워드 필터링 (프롬프트 관련만)
+filtered_posts = crawler.filter_posts_by_keywords(posts)
+# → 키워드 매칭으로 40개 → 8개 필터링 (81% 비용 절감)
+
+# 3단계: LLM으로 프롬프트 추출 (자동 fallback)
+extracted = await crawler.extract_prompts_with_llm(
+    filtered_posts,
+    api_profile="gpt_test"  # 실패 시 자동으로 다른 프로필 시도
+)
+
+# 4단계: DB 저장
+saved_count = crawler.save_prompts_to_db(extracted)
+```
+
+**주요 특징**:
+- 🔍 **1차 필터링**: 프롬프트 관련 키워드 (프롬프트, jailbreak, prompt injection 등)
+- 🤖 **2차 LLM 분석**: OpenAI GPT로 정확한 프롬프트 추출
+- 💰 **비용 최적화**: 필터링으로 API 호출 80% 이상 절감
+- 🔄 **자동 Fallback**: API 실패 시 자동으로 다른 프로필 시도
+- 🎯 **지원 갤러리**: `ai` (인공지능), `235711` (AI 마이너), 직접 입력
+
+**CLI에서 사용**:
+```bash
+python interactive_cli.py
+```
+→ `cc` 선택 → 갤러리 선택 → 페이지 수 입력 → 자동 수집 및 저장
+
+### 4. 🆕 Foolbox 고급 공격
 
 **20+ 그래디언트 기반 이미지 공격**
 
@@ -318,6 +364,7 @@ print(report)
   2. 텍스트 프롬프트 추가
   3. 멀티모달 공격 생성
   4. 프롬프트 관리
+  cc. 🌐 커뮤니티 프롬프트 수집 (DC인사이드)
 
 🔍 RECON (정찰)
   5. 텍스트 프롬프트 검색
@@ -393,6 +440,30 @@ python interactive_cli.py
 
 # CLI에서 'v' 선택 → report
 # → 안전성 평가 리포트 생성
+```
+
+### 5. 커뮤니티 프롬프트 자동 수집
+
+```bash
+# CLI 실행
+python interactive_cli.py
+
+# 메뉴에서 'cc' 선택 (커뮤니티 크롤러)
+# 갤러리 선택: 1 (인공지능 갤러리)
+# 페이지 수: 10
+# → 약 40개 게시글 수집
+
+# 1차 필터링
+# → 프롬프트 키워드 매칭으로 8개 필터링
+
+# API 프로필 선택: 1 (gpt_test)
+# → 실패 시 자동으로 다른 프로필로 재시도
+
+# 2차 LLM 분석
+# → 8개 게시글에서 프롬프트 추출
+
+# 자동 DB 저장
+# → 추출된 프롬프트 자동 저장 완료
 ```
 
 ## 고급 사용법
