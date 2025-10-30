@@ -334,47 +334,108 @@ JSON 형식으로 응답:
         # 여기까지 오면 모든 프로필 실패
         return []
 
-    def save_prompts_to_db(self, prompts: List[Dict]) -> int:
+    def save_prompts_to_db(self, prompts: List[Dict], confirm: bool = True) -> int:
         """
-        추출된 프롬프트를 DB에 저장
+        추출된 프롬프트를 DB에 저장 (사용자 확인 옵션)
 
         Args:
             prompts: 프롬프트 목록
+            confirm: 각 프롬프트 저장 전 사용자 확인 (기본값: True)
 
         Returns:
             저장된 프롬프트 개수
         """
-        saved_count = 0
+        from rich.prompt import Prompt
+        from rich.panel import Panel
+        from rich.table import Table
 
-        console.print(f"\n[cyan]DB에 프롬프트 저장 중...[/cyan]")
+        saved_count = 0
+        skipped_count = 0
+
+        console.print(f"\n[cyan]추출된 프롬프트 검토 및 저장[/cyan]")
 
         for idx, prompt in enumerate(prompts, 1):
             try:
                 payload = prompt['payload']
                 payload_len = len(payload)
+                category = prompt.get('category', 'other')
+                description = prompt.get('description', '')
+                tags = prompt.get('tags', '')
 
-                # 🔍 DEBUG: 저장 전 로깅
-                console.print(f"\n[yellow]💾 [{idx}] 저장 시도 - 길이: {payload_len} chars[/yellow]")
-                console.print(f"    카테고리: {prompt.get('category', 'other')}")
-                console.print(f"    미리보기: {payload[:150]}...")
+                # 프롬프트 미리보기 테이블
+                table = Table(title=f"프롬프트 #{idx}/{len(prompts)}", show_header=True)
+                table.add_column("항목", style="cyan", width=15)
+                table.add_column("내용", style="white")
 
+                table.add_row("카테고리", f"[yellow]{category}[/yellow]")
+                table.add_row("길이", f"{payload_len} chars")
+                table.add_row("설명", description or "N/A")
+                table.add_row("태그", tags or "N/A")
+                table.add_row("출처", prompt.get('source', 'community'))
+                table.add_row("미리보기", payload[:200] + ("..." if len(payload) > 200 else ""))
+
+                console.print("\n")
+                console.print(table)
+
+                # 전체 내용 표시 옵션
+                if confirm:
+                    console.print("\n[dim]옵션: [v]전체보기 / [s]저장 / [k]건너뛰기 / [a]모두저장 / [q]중단[/dim]")
+                    choice = Prompt.ask(
+                        "선택",
+                        choices=["v", "s", "k", "a", "q"],
+                        default="s"
+                    ).lower()
+
+                    # 전체 내용 보기
+                    if choice == "v":
+                        console.print(Panel(
+                            payload,
+                            title="전체 프롬프트 내용",
+                            border_style="cyan"
+                        ))
+                        console.print("\n[dim]옵션: [s]저장 / [k]건너뛰기[/dim]")
+                        choice = Prompt.ask("선택", choices=["s", "k"], default="s").lower()
+
+                    # 모두 저장 (확인 비활성화)
+                    if choice == "a":
+                        confirm = False
+                        choice = "s"
+
+                    # 중단
+                    if choice == "q":
+                        console.print("[yellow]저장 중단[/yellow]")
+                        break
+
+                    # 건너뛰기
+                    if choice == "k":
+                        skipped_count += 1
+                        console.print("[yellow]⏭️  건너뛰기[/yellow]")
+                        continue
+
+                # 저장 실행
                 prompt_id = self.db.insert_prompt(
-                    category=prompt.get('category', 'other'),
+                    category=category,
                     payload=payload,
-                    description=prompt.get('description', ''),
+                    description=description,
                     source=prompt.get('source', 'community'),
-                    tags=prompt.get('tags', '')
+                    tags=tags
                 )
 
                 if prompt_id:
                     saved_count += 1
-                    console.print(f"    [green]✅ 저장 완료 (ID: {prompt_id})[/green]")
+                    console.print(f"[green]✅ 저장 완료 (ID: {prompt_id})[/green]")
 
             except Exception as e:
                 console.print(f"[red]❌ 저장 실패: {e}[/red]")
                 continue
 
-        console.print(f"[green]✅ {saved_count}개 프롬프트 저장 완료[/green]")
+        # 최종 요약
+        console.print(f"\n[bold cyan]저장 완료[/bold cyan]")
+        console.print(f"  ✅ 저장: {saved_count}개")
+        if skipped_count > 0:
+            console.print(f"  ⏭️  건너뜀: {skipped_count}개")
+        console.print(f"  📊 전체: {len(prompts)}개")
+
         return saved_count
 
 
@@ -447,8 +508,15 @@ async def community_import_workflow(db: ArsenalDB, config: Config):
         console.print("[yellow]추출된 프롬프트가 없습니다.[/yellow]")
         return
 
-    # 6. DB 저장
-    saved_count = crawler.save_prompts_to_db(extracted_prompts)
+    # 6. 저장 전 확인 옵션
+    console.print(f"\n[cyan]추출된 프롬프트: {len(extracted_prompts)}개[/cyan]")
+    console.print("[dim]각 프롬프트를 확인하고 저장하시겠습니까?[/dim]")
+
+    from rich.prompt import Confirm
+    confirm_each = Confirm.ask("프롬프트별 확인", default=True)
+
+    # 7. DB 저장
+    saved_count = crawler.save_prompts_to_db(extracted_prompts, confirm=confirm_each)
 
     # 7. 결과 요약
     console.print("\n[bold green]═══════════════════════════════════════[/bold green]")
