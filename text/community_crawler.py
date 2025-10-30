@@ -282,30 +282,17 @@ JSON 형식으로 응답:
                                 response_format={"type": "json_object"},
                                 temperature=0.3,
                                 max_tokens=8000,  # 긴 프롬프트를 위해 증가
-                                timeout=30.0  # 30초 타임아웃
+                                timeout=60.0  # 60초 타임아웃
                             )
 
                             # 응답 파싱
                             import json
                             raw_response = response.choices[0].message.content
-
-                            # 🔍 DEBUG: 원본 LLM 응답 저장
-                            debug_file = Path("logs") / f"llm_response_{post_idx}.json"
-                            debug_file.parent.mkdir(exist_ok=True)
-                            with open(debug_file, 'w', encoding='utf-8') as f:
-                                f.write(raw_response)
-                            console.print(f"[dim]DEBUG: 응답 저장 → {debug_file}[/dim]")
-
                             result = json.loads(raw_response)
 
-                            # 🔍 DEBUG: LLM 응답 로깅
+                            # 프롬프트 추출
                             if result.get('prompts'):
-                                console.print(f"\n[magenta]📊 LLM이 추출한 프롬프트 수: {len(result['prompts'])}[/magenta]")
-                                for idx, prompt_data in enumerate(result['prompts'], 1):
-                                    payload_len = len(prompt_data.get('payload', ''))
-                                    console.print(f"  [{idx}] 길이: {payload_len} chars | 카테고리: {prompt_data.get('category')}")
-                                    console.print(f"      내용 미리보기: {prompt_data.get('payload', '')[:100]}...")
-
+                                for prompt_data in result['prompts']:
                                     prompt_data['source'] = f"{post['source']}: {post['url']}"
                                     extracted_prompts.append(prompt_data)
 
@@ -362,39 +349,32 @@ JSON 형식으로 응답:
                 description = prompt.get('description', '')
                 tags = prompt.get('tags', '')
 
-                # 프롬프트 미리보기 테이블
-                table = Table(title=f"프롬프트 #{idx}/{len(prompts)}", show_header=True)
-                table.add_column("항목", style="cyan", width=15)
-                table.add_column("내용", style="white")
+                # 프롬프트 정보 및 전체 내용 표시
+                console.print("\n" + "=" * 70)
+                console.print(f"[bold cyan]프롬프트 #{idx}/{len(prompts)}[/bold cyan]")
+                console.print("=" * 70)
 
-                table.add_row("카테고리", f"[yellow]{category}[/yellow]")
-                table.add_row("길이", f"{payload_len} chars")
-                table.add_row("설명", description or "N/A")
-                table.add_row("태그", tags or "N/A")
-                table.add_row("출처", prompt.get('source', 'community'))
-                table.add_row("미리보기", payload[:200] + ("..." if len(payload) > 200 else ""))
+                console.print(f"[yellow]카테고리:[/yellow] {category}")
+                console.print(f"[yellow]길이:[/yellow] {payload_len} chars")
+                console.print(f"[yellow]설명:[/yellow] {description or 'N/A'}")
+                console.print(f"[yellow]태그:[/yellow] {tags or 'N/A'}")
+                console.print(f"[yellow]출처:[/yellow] {prompt.get('source', 'community')}")
 
-                console.print("\n")
-                console.print(table)
+                # 전체 내용 표시
+                console.print(f"\n[cyan]{'─' * 70}")
+                console.print("전체 내용:")
+                console.print(f"{'─' * 70}[/cyan]")
+                console.print(payload)
+                console.print(f"[cyan]{'─' * 70}[/cyan]\n")
 
-                # 전체 내용 표시 옵션
+                # 저장 여부 확인
                 if confirm:
-                    console.print("\n[dim]옵션: [v]전체보기 / [s]저장 / [k]건너뛰기 / [a]모두저장 / [q]중단[/dim]")
+                    console.print("[dim]옵션: [s]저장 / [k]건너뛰기 / [a]모두저장 / [q]중단[/dim]")
                     choice = Prompt.ask(
                         "선택",
-                        choices=["v", "s", "k", "a", "q"],
+                        choices=["s", "k", "a", "q"],
                         default="s"
                     ).lower()
-
-                    # 전체 내용 보기
-                    if choice == "v":
-                        console.print(Panel(
-                            payload,
-                            title="전체 프롬프트 내용",
-                            border_style="cyan"
-                        ))
-                        console.print("\n[dim]옵션: [s]저장 / [k]건너뛰기[/dim]")
-                        choice = Prompt.ask("선택", choices=["s", "k"], default="s").lower()
 
                     # 모두 저장 (확인 비활성화)
                     if choice == "a":
