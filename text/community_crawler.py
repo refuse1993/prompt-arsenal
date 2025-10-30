@@ -57,64 +57,57 @@ class CommunityCrawler:
 
         posts = []
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task(f"페이지 수집 중...", total=pages)
+        for page in range(1, pages + 1):
+            try:
+                console.print(f"[dim]페이지 {page}/{pages} 수집 중...[/dim]")
+                # 갤러리 목록 페이지
+                list_url = f"https://gall.dcinside.com/mgallery/board/lists/?id={gallery_id}&page={page}"
+                response = self.session.get(list_url, timeout=10)
+                response.raise_for_status()
 
-            for page in range(1, pages + 1):
-                try:
-                    # 갤러리 목록 페이지
-                    list_url = f"https://gall.dcinside.com/mgallery/board/lists/?id={gallery_id}&page={page}"
-                    response = self.session.get(list_url, timeout=10)
-                    response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'html.parser')
 
-                    soup = BeautifulSoup(response.text, 'html.parser')
+                # 게시글 링크 추출 (올바른 셀렉터)
+                article_links = soup.select('.gall_list tbody tr td.gall_tit a')
 
-                    # 게시글 링크 추출 (올바른 셀렉터)
-                    article_links = soup.select('.gall_list tbody tr td.gall_tit a')
+                for link in article_links[:10]:  # 페이지당 최대 10개
+                    try:
+                        href = link.get('href', '')
 
-                    for link in article_links[:10]:  # 페이지당 최대 10개
-                        try:
-                            href = link.get('href', '')
-
-                            # 잘못된 링크 제외
-                            if not href or href.startswith('javascript:') or not href.startswith('/'):
-                                continue
-
-                            article_url = "https://gall.dcinside.com" + href
-                            title = link.text.strip()
-
-                            # 게시글 내용 가져오기
-                            article_response = self.session.get(article_url, timeout=10)
-                            article_soup = BeautifulSoup(article_response.text, 'html.parser')
-
-                            # 본문 추출
-                            content_div = article_soup.select_one('div.write_div')
-                            if content_div:
-                                content = content_div.get_text(separator="\n", strip=True)
-
-                                posts.append({
-                                    'title': title,
-                                    'content': content,
-                                    'url': article_url,
-                                    'source': 'dcinside'
-                                })
-
-                            time.sleep(0.5)  # Rate limiting
-
-                        except Exception as e:
-                            console.print(f"[yellow]게시글 수집 실패: {e}[/yellow]")
+                        # 잘못된 링크 제외
+                        if not href or href.startswith('javascript:') or not href.startswith('/'):
                             continue
 
-                    progress.update(task, advance=1)
-                    time.sleep(1)  # Rate limiting between pages
+                        article_url = "https://gall.dcinside.com" + href
+                        title = link.text.strip()
 
-                except Exception as e:
-                    console.print(f"[red]페이지 {page} 크롤링 실패: {e}[/red]")
-                    continue
+                        # 게시글 내용 가져오기
+                        article_response = self.session.get(article_url, timeout=10)
+                        article_soup = BeautifulSoup(article_response.text, 'html.parser')
+
+                        # 본문 추출
+                        content_div = article_soup.select_one('div.write_div')
+                        if content_div:
+                            content = content_div.get_text(separator="\n", strip=True)
+
+                            posts.append({
+                                'title': title,
+                                'content': content,
+                                'url': article_url,
+                                'source': 'dcinside'
+                            })
+
+                        time.sleep(0.5)  # Rate limiting
+
+                    except Exception as e:
+                        console.print(f"[yellow]게시글 수집 실패: {e}[/yellow]")
+                        continue
+
+                time.sleep(1)  # Rate limiting between pages
+
+            except Exception as e:
+                console.print(f"[red]페이지 {page} 크롤링 실패: {e}[/red]")
+                continue
 
         console.print(f"[green]✅ DC인사이드: {len(posts)}개 게시글 수집 완료[/green]")
         return posts
@@ -364,7 +357,7 @@ JSON 형식으로 응답:
                 console.print(f"\n[cyan]{'─' * 70}")
                 console.print("전체 내용:")
                 console.print(f"{'─' * 70}[/cyan]")
-                console.print(payload)
+                console.print(payload, markup=False)  # Rich 마크업 비활성화
                 console.print(f"[cyan]{'─' * 70}[/cyan]\n")
 
                 # 저장 여부 확인
