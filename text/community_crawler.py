@@ -168,7 +168,8 @@ class CommunityCrawler:
             console.print("\n[cyan]필터링된 게시글 샘플:[/cyan]")
             for i, post in enumerate(filtered_posts[:3], 1):
                 date_str = post.get('date', 'Unknown')
-                console.print(f"  {i}. [{date_str}] {post['title']}")
+                title = post['title']
+                console.print(f"  {i}. [{date_str}] {title}", markup=False)
 
         return filtered_posts
 
@@ -354,11 +355,11 @@ JSON 형식으로 응답:
                 console.print(f"[bold cyan]프롬프트 #{idx}/{len(prompts)}[/bold cyan]")
                 console.print("=" * 70)
 
-                console.print(f"[yellow]카테고리:[/yellow] {category}")
+                console.print(f"[yellow]카테고리:[/yellow] {category}", markup=False)
                 console.print(f"[yellow]길이:[/yellow] {payload_len} chars")
-                console.print(f"[yellow]설명:[/yellow] {description or 'N/A'}")
-                console.print(f"[yellow]태그:[/yellow] {tags or 'N/A'}")
-                console.print(f"[yellow]출처:[/yellow] {prompt.get('source', 'community')}")
+                console.print(f"[yellow]설명:[/yellow] {description or 'N/A'}", markup=False)
+                console.print(f"[yellow]태그:[/yellow] {tags or 'N/A'}", markup=False)
+                console.print(f"[yellow]출처:[/yellow] {prompt.get('source', 'community')}", markup=False)
 
                 # 전체 내용 표시
                 console.print(f"\n[cyan]{'─' * 70}")
