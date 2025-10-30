@@ -6326,7 +6326,7 @@ class PromptArsenal:
             console.print("[red]API 프로필이 없습니다. 먼저 's'를 눌러 프로필을 추가하세요.[/red]")
             return
 
-        console.print("\n[bold]Target API 프로필:[/bold]")
+        console.print("\n[bold]Target 선택:[/bold]")
 
         # Show strategy-specific recommendations
         if requirements.get('recommended_models'):
@@ -6337,6 +6337,7 @@ class PromptArsenal:
         if requirements.get('min_turns'):
             console.print(f"\n[yellow]ℹ️  이 전략은 최소 {requirements['min_turns']}턴이 필요합니다.[/yellow]\n")
 
+        console.print(f"  [green]0[/green]. 🌐 Custom Endpoint (CTF, 웹서비스 테스트)")
         for idx, name in enumerate(profiles, 1):
             prof = self.config.config['profiles'][name]
             model_id = prof['model']
@@ -6347,19 +6348,89 @@ class PromptArsenal:
 
             console.print(f"  [green]{idx}[/green]. {name} ({prof['provider']}/{prof['model']}){rec_icon}")
 
-        profile_idx = ask("프로필 번호", default="1")
+        profile_idx = ask("선택 번호", default="1")
+
+        use_custom_endpoint = False
+        custom_endpoint_config = {}
+
         try:
-            idx = int(profile_idx) - 1
-            if 0 <= idx < len(profiles):
-                profile_name = profiles[idx]
+            idx = int(profile_idx)
+
+            if idx == 0:
+                # Custom Endpoint 설정
+                use_custom_endpoint = True
+                console.print("\n[cyan]🌐 Custom Endpoint 설정[/cyan]")
+
+                endpoint_url = ask("엔드포인트 URL (예: http://localhost:5000/api/chat)")
+                if not endpoint_url:
+                    console.print("[red]URL을 입력해야 합니다.[/red]")
+                    return
+
+                console.print("\n[bold]요청 방식:[/bold]")
+                console.print("  1. POST (JSON Body)")
+                console.print("  2. GET (Query Parameters)")
+                method_choice = ask("방식", choices=["1", "2"], default="1")
+                method = "POST" if method_choice == "1" else "GET"
+
+                console.print("\n[bold]요청 형식:[/bold]")
+                console.print("  사용 가능한 변수: {prompt}, {image_url}, {turn}")
+                console.print("  예: {\"message\": \"{prompt}\", \"user\": \"test\"}")
+
+                if method == "POST":
+                    body_template = ask("Body Template (JSON)", default='{{"message": "{prompt}"}}')
+                    custom_endpoint_config = {
+                        'url': endpoint_url,
+                        'method': method,
+                        'body_template': body_template
+                    }
+                else:
+                    query_template = ask("Query Template", default='prompt={prompt}')
+                    custom_endpoint_config = {
+                        'url': endpoint_url,
+                        'method': method,
+                        'query_template': query_template
+                    }
+
+                # Headers (optional)
+                if Confirm.ask("커스텀 헤더 추가?", default=False):
+                    console.print("헤더 입력 (형식: Key: Value, 빈 줄로 종료)")
+                    headers = {}
+                    while True:
+                        header = ask("Header (빈 줄로 종료)", default="")
+                        if not header:
+                            break
+                        if ":" in header:
+                            key, value = header.split(":", 1)
+                            headers[key.strip()] = value.strip()
+                    custom_endpoint_config['headers'] = headers
+
+                # Response parsing
+                console.print("\n[bold]응답 파싱:[/bold]")
+                console.print("  응답에서 텍스트를 추출할 JSON 경로")
+                console.print("  예: response.text 또는 data.message")
+                response_path = ask("Response Path", default="response")
+                custom_endpoint_config['response_path'] = response_path
+
+                # Create dummy profile for compatibility
+                profile = {
+                    'provider': 'custom',
+                    'model': 'custom-endpoint',
+                    'api_key': ''
+                }
+
             else:
-                console.print("[yellow]잘못된 선택입니다. 첫 번째 프로필을 사용합니다.[/yellow]")
-                profile_name = profiles[0]
+                idx = idx - 1
+                if 0 <= idx < len(profiles):
+                    profile_name = profiles[idx]
+                else:
+                    console.print("[yellow]잘못된 선택입니다. 첫 번째 프로필을 사용합니다.[/yellow]")
+                    profile_name = profiles[0]
+                profile = self.config.config['profiles'][profile_name]
+
         except ValueError:
             console.print("[yellow]숫자를 입력하세요. 첫 번째 프로필을 사용합니다.[/yellow]")
             profile_name = profiles[0]
-
-        profile = self.config.config['profiles'][profile_name]
+            profile = self.config.config['profiles'][profile_name]
 
         # Judge profile selection
         judge_profiles = list(self.config.config.get('judge_profiles', {}).keys())
@@ -6418,11 +6489,17 @@ class PromptArsenal:
             api_key=judge_profile['api_key']
         )
 
-        target_llm = MultimodalLLMClient(
-            provider=profile['provider'],
-            model=profile['model'],
-            api_key=profile['api_key']
-        )
+        # Create target client (Custom Endpoint or Standard LLM)
+        if use_custom_endpoint:
+            from multimodal.custom_endpoint_client import CustomMultimodalEndpointClient
+            target_llm = CustomMultimodalEndpointClient(config=custom_endpoint_config)
+            console.print(f"[green]✓[/green] Custom Endpoint 클라이언트 생성: {custom_endpoint_config['url']}")
+        else:
+            target_llm = MultimodalLLMClient(
+                provider=profile['provider'],
+                model=profile['model'],
+                api_key=profile['api_key']
+            )
 
         # Create judge
         from core.llm_judge import LLMJudge

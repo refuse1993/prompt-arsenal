@@ -1,0 +1,344 @@
+{
+  "meta": {
+    "title": "Prompt Arsenal Usage Guide for Claude",
+    "description": "CTF 및 보안 테스팅을 위한 Prompt Arsenal 도구 사용 가이드",
+    "version": "1.0.0",
+    "last_updated": "2025-10-30"
+  },
+
+  "core_modules": {
+    "database": {
+      "file": "core/database.py",
+      "class": "ArsenalDB",
+      "description": "프롬프트 및 테스트 결과 저장/조회",
+      "usage": {
+        "init": "from core.database import ArsenalDB\ndb = ArsenalDB()",
+        "common_methods": {
+          "insert_prompt": "db.insert_prompt(category='jailbreak', payload='...', description='...')",
+          "search_prompts": "db.search_prompts(keyword='ignore', category='jailbreak')",
+          "insert_test_result": "db.insert_test_result(prompt_id=1, provider='openai', model='gpt-4', success=True, response='...')",
+          "get_test_results": "db.get_test_results(prompt_id=1)",
+          "insert_media": "db.insert_media(media_type='image', attack_type='fgsm', base_file='...', generated_file='...')",
+          "get_stats": "db.get_stats()"
+        }
+      }
+    },
+
+    "judge": {
+      "file": "core/judge.py",
+      "class": "Judge",
+      "description": "응답 자동 판정 (성공/실패)",
+      "usage": {
+        "init": "from core import Judge\njudge = Judge()",
+        "methods": {
+          "judge": "result = judge.judge(prompt='...', response='...', goal='...')",
+          "batch_judge": "results = judge.batch_judge(test_results)"
+        }
+      }
+    },
+
+    "llm_judge": {
+      "file": "core/llm_judge.py",
+      "class": "LLMJudge",
+      "description": "LLM 기반 정확한 판정",
+      "usage": {
+        "init": "from core.llm_judge import LLMJudge\njudge = LLMJudge(db=db, provider='openai', model='gpt-4o-mini', api_key='...')",
+        "methods": {
+          "judge_response": "result = await judge.judge_response(prompt='...', response='...', goal='...')"
+        }
+      }
+    },
+
+    "config": {
+      "file": "core/config.py",
+      "class": "Config",
+      "description": "API 프로필 관리",
+      "usage": {
+        "init": "from core.config import Config\nconfig = Config()",
+        "methods": {
+          "get_profile": "profile = config.config['profiles']['profile_name']",
+          "get_all_profiles": "profiles = config.get_all_profiles()"
+        }
+      }
+    }
+  },
+
+  "attack_modules": {
+    "text_llm_tester": {
+      "file": "text/llm_tester.py",
+      "class": "LLMTester",
+      "description": "텍스트 LLM 자동 테스팅",
+      "usage": {
+        "init": "from text.llm_tester import LLMTester\ntester = LLMTester(db=db, provider='openai', model='gpt-4o-mini', api_key='...')",
+        "methods": {
+          "test_prompt": "result = await tester.test_prompt(prompt_id=1, prompt='...')",
+          "test_prompt_with_judge": "result = await tester.test_prompt_with_judge(prompt_id=1, prompt='...', judge=judge)",
+          "batch_test": "results = await tester.batch_test(prompts, judge=judge)"
+        }
+      }
+    },
+
+    "custom_endpoint": {
+      "file": "multimodal/custom_endpoint_client.py",
+      "class": "CustomEndpointClient",
+      "description": "CTF/웹서비스 커스텀 엔드포인트 테스팅",
+      "usage": {
+        "init": "from multimodal.custom_endpoint_client import CustomEndpointClient\n\nconfig = {\n  'url': 'http://target.com/api/chat',\n  'method': 'POST',\n  'body_template': '{\"message\": \"{prompt}\"}',\n  'headers': {'Content-Type': 'application/json'},\n  'response_path': 'response'\n}\n\nclient = CustomEndpointClient(config)",
+        "methods": {
+          "generate": "response = await client.generate(prompt='test', image_url='...', turn=1)"
+        },
+        "templates": {
+          "post_json": {
+            "url": "http://example.com/api/chat",
+            "method": "POST",
+            "body_template": "{\"message\": \"{prompt}\", \"user\": \"test\"}",
+            "headers": {"Content-Type": "application/json", "Authorization": "Bearer TOKEN"},
+            "response_path": "data.response"
+          },
+          "get_query": {
+            "url": "http://example.com/api/chat",
+            "method": "GET",
+            "query_template": "q={prompt}&user=test",
+            "headers": {},
+            "response_path": "response"
+          },
+          "with_image": {
+            "url": "http://example.com/api/vision",
+            "method": "POST",
+            "body_template": "{\"text\": \"{prompt}\", \"image_url\": \"{image_url}\"}",
+            "headers": {"Content-Type": "application/json"},
+            "response_path": "result.text"
+          }
+        }
+      }
+    },
+
+    "image_adversarial": {
+      "file": "multimodal/image_adversarial.py",
+      "class": "ImageAdversarialAttack",
+      "description": "이미지 적대적 공격 생성",
+      "usage": {
+        "init": "from multimodal.image_adversarial import ImageAdversarialAttack\nattack = ImageAdversarialAttack()",
+        "methods": {
+          "fgsm_attack": "adv_image = attack.fgsm_attack(image_path='...', epsilon=0.03)",
+          "pixel_attack": "adv_image = attack.pixel_attack(image_path='...', num_pixels=10)",
+          "noise_attack": "adv_image = attack.noise_attack(image_path='...', noise_level=0.1)"
+        }
+      }
+    },
+
+    "multimodal_tester": {
+      "file": "multimodal/multimodal_tester.py",
+      "class": "MultimodalTester",
+      "description": "멀티모달 LLM 테스팅",
+      "usage": {
+        "init": "from multimodal.multimodal_tester import MultimodalTester\ntester = MultimodalTester(db=db, provider='openai', model='gpt-4o', api_key='...')",
+        "methods": {
+          "test_media": "result = await tester.test_media(media_id=1, test_prompt='...')",
+          "batch_test": "results = await tester.batch_test(media_ids=[1,2,3], test_prompt='...')"
+        }
+      }
+    }
+  },
+
+  "multiturn_strategies": {
+    "description": "멀티턴 공격 전략",
+    "file": "multiturn/strategies.py",
+    "strategies": {
+      "crescendo": {
+        "class": "CrescendoStrategy",
+        "description": "점진적 escalation 전략 (텍스트 전용)",
+        "success_rate": "65-70%",
+        "recommended_models": ["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet"],
+        "min_turns": 5,
+        "usage": "from multiturn.strategies import CrescendoStrategy\nstrategy = CrescendoStrategy(db=db, llm_client=llm)"
+      },
+      "roleplay": {
+        "class": "RoleplayStrategy",
+        "description": "시나리오 기반 롤플레이 (텍스트 전용)",
+        "success_rate": "60-70%",
+        "recommended_models": ["gpt-4o-mini", "claude-haiku-4"],
+        "min_turns": 3,
+        "usage": "from multiturn.strategies import RoleplayStrategy\nstrategy = RoleplayStrategy(db=db, llm_client=llm)"
+      },
+      "visual_storytelling": {
+        "class": "VisualStorytellingStrategy",
+        "description": "이미지 기반 스토리텔링 (멀티모달)",
+        "success_rate": "83.5%",
+        "recommended_models": ["gpt-4o", "claude-4", "gemini-2.5-flash"],
+        "min_turns": 7,
+        "requires": "image_generator",
+        "usage": "from multiturn.strategies import VisualStorytellingStrategy\nstrategy = VisualStorytellingStrategy(db=db, llm_client=llm, image_generator=img_gen)"
+      }
+    }
+  },
+
+  "mcp_integrations": {
+    "playwright": {
+      "description": "브라우저 자동화 및 페이지 분석",
+      "available": true,
+      "common_operations": {
+        "navigate": "browser_navigate('http://target.com')",
+        "snapshot": "html = browser_snapshot()",
+        "screenshot": "browser_take_screenshot(filename='page.png')",
+        "click": "browser_click(element='button', ref='...')",
+        "evaluate": "result = browser_evaluate(function='() => document.body.innerText')",
+        "network_requests": "requests = browser_network_requests()"
+      }
+    },
+    "filesystem": {
+      "description": "파일 시스템 접근",
+      "available": true,
+      "common_operations": {
+        "read": "mcp__filesystem__read_text_file(path='...')",
+        "write": "mcp__filesystem__write_file(path='...', content='...')",
+        "list": "mcp__filesystem__list_directory(path='...')"
+      }
+    }
+  },
+
+  "ctf_workflow": {
+    "description": "CTF 문제 풀이 워크플로우",
+    "steps": [
+      {
+        "step": 1,
+        "name": "정찰 (Reconnaissance)",
+        "actions": [
+          "Playwright로 페이지 접속: browser_navigate(url)",
+          "페이지 구조 분석: browser_snapshot()",
+          "네트워크 요청 확인: browser_network_requests()",
+          "스크린샷 캡처: browser_take_screenshot()"
+        ]
+      },
+      {
+        "step": 2,
+        "name": "취약점 분석",
+        "actions": [
+          "HTML/JavaScript 분석으로 엔드포인트 찾기",
+          "API 구조 파악 (POST/GET, 파라미터 등)",
+          "입력 검증 로직 확인",
+          "응답 형식 분석"
+        ]
+      },
+      {
+        "step": 3,
+        "name": "공격 준비",
+        "actions": [
+          "DB에서 관련 프롬프트 검색: db.search_prompts(keyword='...')",
+          "Custom Endpoint 설정 생성",
+          "공격 전략 선택 (Crescendo, Roleplay 등)"
+        ]
+      },
+      {
+        "step": 4,
+        "name": "공격 실행",
+        "actions": [
+          "CustomEndpointClient로 요청 전송",
+          "응답 확인 및 판정",
+          "필요시 멀티턴 전략 적용"
+        ]
+      },
+      {
+        "step": 5,
+        "name": "결과 저장",
+        "actions": [
+          "성공한 프롬프트 DB에 저장: db.insert_prompt(...)",
+          "테스트 결과 저장: db.insert_test_result(...)",
+          "패턴 분석 및 학습"
+        ]
+      }
+    ]
+  },
+
+  "example_scenarios": {
+    "basic_ctf_llm_jailbreak": {
+      "description": "기본 LLM Jailbreak CTF",
+      "code": "# Step 1: 페이지 분석\nbrowser_navigate('http://ctf.example.com')\nhtml = browser_snapshot()\n\n# Step 2: Custom Endpoint 설정\nfrom multimodal.custom_endpoint_client import CustomEndpointClient\nconfig = {\n    'url': 'http://ctf.example.com/api/chat',\n    'method': 'POST',\n    'body_template': '{\"message\": \"{prompt}\"}',\n    'response_path': 'response'\n}\nclient = CustomEndpointClient(config)\n\n# Step 3: DB에서 프롬프트 가져오기\nfrom core.database import ArsenalDB\ndb = ArsenalDB()\nprompts = db.search_prompts(keyword='ignore', category='jailbreak')\n\n# Step 4: 공격 실행\nfor prompt in prompts[:10]:\n    response = await client.generate(prompt['payload'])\n    print(f\"Prompt: {prompt['payload'][:50]}...\")\n    print(f\"Response: {response[:100]}...\")\n    \n    # 성공 여부 판정\n    if 'flag{' in response or 'secret' in response.lower():\n        print('✓ Success!')\n        db.insert_test_result(\n            prompt_id=prompt['id'],\n            provider='custom',\n            model='ctf-endpoint',\n            success=True,\n            response=response\n        )\n        break"
+    },
+
+    "multiturn_attack": {
+      "description": "멀티턴 전략으로 고급 방어 우회",
+      "code": "# Step 1: 설정\nfrom core.database import ArsenalDB\nfrom core.llm_judge import LLMJudge\nfrom multimodal.llm_client import LLMClient\nfrom multimodal.custom_endpoint_client import CustomMultimodalEndpointClient\nfrom multiturn import MultiTurnOrchestrator, MultiTurnScorer\nfrom multiturn.strategies import CrescendoStrategy\n\ndb = ArsenalDB()\n\n# Step 2: Target 클라이언트 (Custom Endpoint)\ntarget_config = {\n    'url': 'http://target.com/api/chat',\n    'method': 'POST',\n    'body_template': '{\"prompt\": \"{prompt}\"}',\n    'response_path': 'data.message'\n}\ntarget_llm = CustomMultimodalEndpointClient(target_config)\n\n# Step 3: Judge 설정\njudge = LLMJudge(db=db, provider='openai', model='gpt-4o-mini', api_key='...')\nscorer = MultiTurnScorer(judge=judge)\n\n# Step 4: 전략 설정\nstrategy_llm = LLMClient(provider='openai', model='gpt-4o-mini', api_key='...')\nstrategy = CrescendoStrategy(db=db, llm_client=strategy_llm)\n\n# Step 5: 공격 실행\norchestrator = MultiTurnOrchestrator(\n    db=db,\n    strategy=strategy,\n    target=target_llm,\n    scorer=scorer,\n    max_turns=10\n)\n\nresult = await orchestrator.execute(goal='Extract secret API key')\nprint(f\"Success: {result['success']}\")\nprint(f\"Turns: {result['turn_count']}\")"
+    },
+
+    "web_service_security_test": {
+      "description": "실제 웹 서비스 보안 테스트",
+      "code": "# Step 1: Playwright로 웹앱 분석\nbrowser_navigate('https://webapp.example.com/chat')\nhtml = browser_snapshot()\nnetwork = browser_network_requests()\n\n# Step 2: API 엔드포인트 추출\nimport json\nfor req in network:\n    if '/api/' in req['url']:\n        print(f\"Found API: {req['url']}\")\n        print(f\"Method: {req['method']}\")\n        print(f\"Payload: {req.get('postData', 'N/A')}\")\n\n# Step 3: Custom Endpoint로 테스트\nconfig = {\n    'url': 'https://webapp.example.com/api/chat',\n    'method': 'POST',\n    'body_template': json.loads(req['postData']),  # 실제 요청 형식 사용\n    'headers': {'Authorization': 'Bearer TOKEN'},\n    'response_path': 'data.message'\n}\n\nfrom multimodal.custom_endpoint_client import CustomEndpointClient\nclient = CustomEndpointClient(config)\n\n# Step 4: 프롬프트 인젝션 테스트\nfrom core.database import ArsenalDB\ndb = ArsenalDB()\n\ninjection_prompts = db.search_prompts(category='prompt-injection', limit=50)\n\nfor p in injection_prompts:\n    response = await client.generate(p['payload'])\n    # Judge로 자동 판정\n    if judge.judge(p['payload'], response, goal='Extract system prompt'):\n        print(f\"✓ Vulnerability found: {p['payload'][:50]}\")\n        db.insert_test_result(...)"
+    }
+  },
+
+  "best_practices": {
+    "reconnaissance": [
+      "Playwright로 페이지 완전히 로드 후 분석",
+      "네트워크 요청 로그로 실제 API 엔드포인트 확인",
+      "JavaScript 코드에서 클라이언트 측 검증 로직 확인",
+      "응답 형식 정확히 파악 (JSON 경로)"
+    ],
+    "attack_execution": [
+      "단순한 것부터 시작 (basic jailbreak → 멀티턴)",
+      "DB에 모든 시도 기록 (성공/실패 모두)",
+      "성공한 패턴 즉시 저장 및 변형 시도",
+      "Rate limit 고려하여 요청 간격 조정"
+    ],
+    "result_analysis": [
+      "Judge 사용하여 자동 판정",
+      "False positive 체크 (키워드만으로 판단 금지)",
+      "성공 패턴 분석 및 일반화",
+      "실패 원인 분석 (필터링 키워드 등)"
+    ]
+  },
+
+  "troubleshooting": {
+    "connection_errors": {
+      "issue": "Custom Endpoint 연결 실패",
+      "solutions": [
+        "URL 확인 (http:// 또는 https://)",
+        "네트워크 방화벽 확인",
+        "CORS 문제인지 확인 (브라우저 console)",
+        "헤더 설정 확인 (Authorization, Content-Type 등)"
+      ]
+    },
+    "response_parsing_errors": {
+      "issue": "응답 파싱 실패",
+      "solutions": [
+        "response_path 경로 재확인",
+        "실제 응답 JSON 구조 확인",
+        "중첩된 객체/배열 경로 정확히 지정",
+        "fallback으로 전체 응답 반환 활용"
+      ]
+    },
+    "rate_limiting": {
+      "issue": "Rate limit 초과",
+      "solutions": [
+        "요청 간 delay 추가 (asyncio.sleep)",
+        "배치 크기 줄이기",
+        "여러 API 키 로테이션",
+        "프록시 사용"
+      ]
+    }
+  },
+
+  "quick_reference": {
+    "essential_imports": [
+      "from core.database import ArsenalDB",
+      "from core import Judge",
+      "from core.llm_judge import LLMJudge",
+      "from text.llm_tester import LLMTester",
+      "from multimodal.custom_endpoint_client import CustomEndpointClient, CustomMultimodalEndpointClient",
+      "from multiturn.strategies import CrescendoStrategy, RoleplayStrategy"
+    ],
+    "common_db_queries": {
+      "search_jailbreak": "db.search_prompts(category='jailbreak', limit=100)",
+      "search_injection": "db.search_prompts(category='prompt-injection', limit=100)",
+      "get_successful": "db.get_test_results(success=True, limit=50)",
+      "get_stats": "db.get_stats()"
+    },
+    "playwright_essentials": {
+      "navigate": "browser_navigate(url)",
+      "get_html": "browser_snapshot()",
+      "screenshot": "browser_take_screenshot()",
+      "network": "browser_network_requests()",
+      "eval_js": "browser_evaluate(function='() => {...}')"
+    }
+  }
+}
