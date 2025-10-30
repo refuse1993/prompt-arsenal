@@ -4,11 +4,12 @@
  */
 
 import { Card } from '../components/Card.js';
-import { Chart } from '../components/Chart.js';
+import { Chart as ChartComponent } from '../components/Chart.js';
 
 class HomePage {
     constructor() {
         this.loadStats();
+        this.loadClassificationStats();
         this.loadActivity();
         this.loadSuccessRates();
     }
@@ -169,7 +170,7 @@ class HomePage {
             chartData.push({ label: 'CTF', value: 0, color: '#10b981' });
         }
 
-        container.appendChild(Chart.createBarChart(chartData));
+        container.appendChild(ChartComponent.createBarChart(chartData));
     }
 
     getActivityIcon(type) {
@@ -191,6 +192,308 @@ class HomePage {
             day: '2-digit',
             hour: '2-digit',
             minute: '2-digit'
+        });
+    }
+
+    async loadClassificationStats() {
+        try {
+            const response = await fetch('/api/stats/classification');
+            const result = await response.json();
+
+            if (result.success) {
+                this.renderClassificationCharts(result.data);
+            }
+        } catch (error) {
+            console.error('Failed to load classification stats:', error);
+        }
+    }
+
+    renderClassificationCharts(data) {
+        // Purpose Chart (Doughnut)
+        this.renderPurposeChart(data.purpose);
+
+        // Risk Category Chart (Doughnut)
+        this.renderRiskChart(data.risk_category);
+
+        // Technique Chart (Horizontal Bar)
+        this.renderTechniqueChart(data.technique);
+
+        // Success Rate Charts
+        this.renderPurposeSuccessChart(data.purpose);
+        this.renderRiskSuccessChart(data.risk_category);
+    }
+
+    renderPurposeChart(purposeData) {
+        const ctx = document.getElementById('purposeChart');
+        if (!ctx) return;
+
+        const labels = purposeData.map(p => p.purpose);
+        const values = purposeData.map(p => p.prompt_count);
+        const colors = {
+            'offensive': 'rgba(239, 68, 68, 0.8)',  // Red
+            'defensive': 'rgba(34, 197, 94, 0.8)'    // Green
+        };
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels.map(l => l === 'offensive' ? '⚔️ Offensive' : '🛡️ Defensive'),
+                datasets: [{
+                    data: values,
+                    backgroundColor: labels.map(l => colors[l] || 'rgba(156, 163, 175, 0.8)'),
+                    borderWidth: 2,
+                    borderColor: '#1f2937'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#e5e7eb',
+                            font: { size: 12 },
+                            padding: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percent = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value.toLocaleString()} (${percent}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderRiskChart(riskData) {
+        const ctx = document.getElementById('riskChart');
+        if (!ctx) return;
+
+        const labels = riskData.map(r => r.risk_category);
+        const values = riskData.map(r => r.prompt_count);
+        const colors = {
+            'security': 'rgba(59, 130, 246, 0.8)',     // Blue
+            'safety': 'rgba(251, 191, 36, 0.8)',       // Yellow
+            'ethics': 'rgba(168, 85, 247, 0.8)',       // Purple
+            'compliance': 'rgba(34, 197, 94, 0.8)',    // Green
+            'misinformation': 'rgba(239, 68, 68, 0.8)' // Red
+        };
+
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels.map(l => {
+                    const icons = {
+                        'security': '🔒 Security',
+                        'safety': '⚠️ Safety',
+                        'ethics': '🎭 Ethics',
+                        'compliance': '📋 Compliance',
+                        'misinformation': '📰 Misinfo'
+                    };
+                    return icons[l] || l;
+                }),
+                datasets: [{
+                    data: values,
+                    backgroundColor: labels.map(l => colors[l] || 'rgba(156, 163, 175, 0.8)'),
+                    borderWidth: 2,
+                    borderColor: '#1f2937'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#e5e7eb',
+                            font: { size: 11 },
+                            padding: 8
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percent = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value.toLocaleString()} (${percent}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    renderTechniqueChart(techniqueData) {
+        const ctx = document.getElementById('techniqueChart');
+        if (!ctx) return;
+
+        const labels = techniqueData.map(t => t.technique);
+        const values = techniqueData.map(t => t.prompt_count);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Prompts',
+                    data: values,
+                    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.parsed.x.toLocaleString()} prompts`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: 'rgba(75, 85, 99, 0.3)' }
+                    },
+                    y: {
+                        ticks: { color: '#e5e7eb', font: { size: 11 } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    renderPurposeSuccessChart(purposeData) {
+        const ctx = document.getElementById('purposeSuccessChart');
+        if (!ctx) return;
+
+        const labels = purposeData.map(p => p.purpose === 'offensive' ? '⚔️ Offensive' : '🛡️ Defensive');
+        const successRates = purposeData.map(p => (p.success_rate || 0).toFixed(1));
+        const testCounts = purposeData.map(p => p.test_count || 0);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Success Rate (%)',
+                    data: successRates,
+                    backgroundColor: labels.map(l =>
+                        l.includes('Offensive') ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)'
+                    ),
+                    borderWidth: 2,
+                    borderColor: '#1f2937'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const idx = context.dataIndex;
+                                return [
+                                    `Success Rate: ${context.parsed.y}%`,
+                                    `Total Tests: ${testCounts[idx].toLocaleString()}`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: '#9ca3af', callback: (value) => value + '%' },
+                        grid: { color: 'rgba(75, 85, 99, 0.3)' }
+                    },
+                    x: {
+                        ticks: { color: '#e5e7eb' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    renderRiskSuccessChart(riskData) {
+        const ctx = document.getElementById('riskSuccessChart');
+        if (!ctx) return;
+
+        const labels = riskData.map(r => {
+            const icons = {
+                'security': '🔒 Security',
+                'safety': '⚠️ Safety',
+                'ethics': '🎭 Ethics',
+                'compliance': '📋 Compliance',
+                'misinformation': '📰 Misinfo'
+            };
+            return icons[r.risk_category] || r.risk_category;
+        });
+        const successRates = riskData.map(r => (r.success_rate || 0).toFixed(1));
+        const testCounts = riskData.map(r => r.test_count || 0);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Success Rate (%)',
+                    data: successRates,
+                    backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                    borderColor: 'rgba(99, 102, 241, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const idx = context.dataIndex;
+                                return [
+                                    `Success Rate: ${context.parsed.y}%`,
+                                    `Total Tests: ${testCounts[idx].toLocaleString()}`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: '#9ca3af', callback: (value) => value + '%' },
+                        grid: { color: 'rgba(75, 85, 99, 0.3)' }
+                    },
+                    x: {
+                        ticks: { color: '#e5e7eb', font: { size: 11 } },
+                        grid: { display: false }
+                    }
+                }
+            }
         });
     }
 }

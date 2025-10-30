@@ -15,6 +15,13 @@ class PromptsPage {
         this.currentCategory = null;
         this.currentModel = null;
         this.searchQuery = '';
+
+        // Classification filters
+        this.currentPurpose = null;
+        this.currentRiskCategory = null;
+        this.currentTechnique = null;
+        this.currentModality = null;
+
         this.pagination = new Pagination({
             currentPage: 1,
             totalPages: 1,
@@ -26,7 +33,7 @@ class PromptsPage {
 
     async init() {
         await this.loadCategories();
-        await this.renderModelFilter();
+        await this.renderFilters();
         this.renderSearchBar();
         await this.loadPrompts();
     }
@@ -126,73 +133,187 @@ class PromptsPage {
         return btn;
     }
 
-    async renderModelFilter() {
+    async renderFilters() {
         const container = document.getElementById('filter-container');
 
-        // Get available models from test results
+        // Fetch classification options
+        let classificationOptions = null;
+        try {
+            const response = await fetch('/api/prompts/classification-options');
+            const result = await response.json();
+            if (result.success) {
+                classificationOptions = result.data;
+            }
+        } catch (error) {
+            console.error('Failed to load classification options:', error);
+        }
+
+        // Fetch models
+        let models = null;
         try {
             const response = await fetch('/api/prompts/models');
             const result = await response.json();
-
             if (result.success && result.data.length > 0) {
-                const filterDiv = document.createElement('div');
-                filterDiv.style.cssText = `
-                    display: flex;
-                    align-items: center;
-                    gap: 0.75rem;
-                    padding: 0.75rem;
-                    background: hsl(var(--card));
-                    border: 1px solid hsl(var(--border));
-                    border-radius: var(--radius-md);
-                `;
-
-                const label = document.createElement('label');
-                label.textContent = 'Model Filter:';
-                label.style.cssText = `
-                    font-weight: 600;
-                    font-size: 0.875rem;
-                    color: hsl(var(--foreground));
-                    white-space: nowrap;
-                `;
-
-                const select = document.createElement('select');
-                select.style.cssText = `
-                    padding: 0.5rem 1rem;
-                    background: hsl(var(--background));
-                    border: 1px solid hsl(var(--border));
-                    border-radius: var(--radius-md);
-                    color: hsl(var(--foreground));
-                    font-size: 0.875rem;
-                    cursor: pointer;
-                    min-width: 200px;
-                `;
-
-                // Add "All Models" option
-                const allOption = document.createElement('option');
-                allOption.value = '';
-                allOption.textContent = 'All Models';
-                select.appendChild(allOption);
-
-                // Add model options
-                result.data.forEach(item => {
-                    const option = document.createElement('option');
-                    option.value = `${item.provider}/${item.model}`;
-                    option.textContent = `${item.provider} / ${item.model} (${item.count})`;
-                    select.appendChild(option);
-                });
-
-                select.addEventListener('change', (e) => {
-                    this.currentModel = e.target.value || null;
-                    this.loadPrompts(1);
-                });
-
-                filterDiv.appendChild(label);
-                filterDiv.appendChild(select);
-                container.appendChild(filterDiv);
+                models = result.data;
             }
         } catch (error) {
             console.error('Failed to load models:', error);
         }
+
+        // Container for all filters
+        const filterGrid = document.createElement('div');
+        filterGrid.style.cssText = `
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+            padding: 1rem;
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius-md);
+            margin-bottom: 1rem;
+        `;
+
+        // Purpose filter
+        if (classificationOptions?.purpose?.length > 0) {
+            filterGrid.appendChild(this.createFilterDropdown(
+                '🎯 Purpose',
+                'purpose',
+                classificationOptions.purpose.map(p => ({
+                    value: p.purpose,
+                    label: p.purpose === 'offensive' ? '⚔️ Offensive' : '🛡️ Defensive',
+                    count: p.count
+                })),
+                (value) => {
+                    this.currentPurpose = value;
+                    this.loadPrompts(1);
+                }
+            ));
+        }
+
+        // Risk Category filter
+        if (classificationOptions?.risk_category?.length > 0) {
+            const riskIcons = {
+                'security': '🔒',
+                'safety': '⚠️',
+                'ethics': '🎭',
+                'compliance': '📋',
+                'misinformation': '📰'
+            };
+            filterGrid.appendChild(this.createFilterDropdown(
+                '⚠️ Risk Category',
+                'risk_category',
+                classificationOptions.risk_category.map(r => ({
+                    value: r.risk_category,
+                    label: `${riskIcons[r.risk_category] || ''} ${r.risk_category}`,
+                    count: r.count
+                })),
+                (value) => {
+                    this.currentRiskCategory = value;
+                    this.loadPrompts(1);
+                }
+            ));
+        }
+
+        // Technique filter
+        if (classificationOptions?.technique?.length > 0) {
+            filterGrid.appendChild(this.createFilterDropdown(
+                '🔧 Technique',
+                'technique',
+                classificationOptions.technique.map(t => ({
+                    value: t.technique,
+                    label: t.technique.replace(/_/g, ' '),
+                    count: t.count
+                })),
+                (value) => {
+                    this.currentTechnique = value;
+                    this.loadPrompts(1);
+                }
+            ));
+        }
+
+        // Modality filter
+        if (classificationOptions?.modality?.length > 0) {
+            filterGrid.appendChild(this.createFilterDropdown(
+                '🎨 Modality',
+                'modality',
+                classificationOptions.modality.map(m => ({
+                    value: m.modality,
+                    label: m.modality.replace(/_/g, ' '),
+                    count: m.count
+                })),
+                (value) => {
+                    this.currentModality = value;
+                    this.loadPrompts(1);
+                }
+            ));
+        }
+
+        // Model filter
+        if (models) {
+            filterGrid.appendChild(this.createFilterDropdown(
+                '🤖 Model',
+                'model',
+                models.map(m => ({
+                    value: `${m.provider}/${m.model}`,
+                    label: `${m.provider}/${m.model}`,
+                    count: m.count
+                })),
+                (value) => {
+                    this.currentModel = value;
+                    this.loadPrompts(1);
+                }
+            ));
+        }
+
+        container.appendChild(filterGrid);
+    }
+
+    createFilterDropdown(label, name, options, onChange) {
+        const wrapper = document.createElement('div');
+
+        const labelEl = document.createElement('label');
+        labelEl.textContent = label;
+        labelEl.style.cssText = `
+            display: block;
+            font-weight: 600;
+            font-size: 0.8125rem;
+            color: hsl(var(--foreground));
+            margin-bottom: 0.375rem;
+        `;
+
+        const select = document.createElement('select');
+        select.style.cssText = `
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background: hsl(var(--background));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius-md);
+            color: hsl(var(--foreground));
+            font-size: 0.875rem;
+            cursor: pointer;
+        `;
+
+        // Add "All" option
+        const allOption = document.createElement('option');
+        allOption.value = '';
+        allOption.textContent = `All (${options.reduce((sum, o) => sum + o.count, 0)})`;
+        select.appendChild(allOption);
+
+        // Add options
+        options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = `${opt.label} (${opt.count})`;
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', (e) => {
+            onChange(e.target.value || null);
+        });
+
+        wrapper.appendChild(labelEl);
+        wrapper.appendChild(select);
+        return wrapper;
     }
 
     renderSearchBar() {
@@ -219,6 +340,20 @@ class PromptsPage {
                 url += `&model=${encodeURIComponent(this.currentModel)}`;
             }
 
+            // Add classification filters
+            if (this.currentPurpose) {
+                url += `&purpose=${encodeURIComponent(this.currentPurpose)}`;
+            }
+            if (this.currentRiskCategory) {
+                url += `&risk_category=${encodeURIComponent(this.currentRiskCategory)}`;
+            }
+            if (this.currentTechnique) {
+                url += `&technique=${encodeURIComponent(this.currentTechnique)}`;
+            }
+            if (this.currentModality) {
+                url += `&modality=${encodeURIComponent(this.currentModality)}`;
+            }
+
             if (this.searchQuery) {
                 url = `/api/prompts/search?q=${encodeURIComponent(this.searchQuery)}`;
                 if (this.currentCategory) {
@@ -226,6 +361,19 @@ class PromptsPage {
                 }
                 if (this.currentModel) {
                     url += `&model=${encodeURIComponent(this.currentModel)}`;
+                }
+                // Add classification filters to search
+                if (this.currentPurpose) {
+                    url += `&purpose=${encodeURIComponent(this.currentPurpose)}`;
+                }
+                if (this.currentRiskCategory) {
+                    url += `&risk_category=${encodeURIComponent(this.currentRiskCategory)}`;
+                }
+                if (this.currentTechnique) {
+                    url += `&technique=${encodeURIComponent(this.currentTechnique)}`;
+                }
+                if (this.currentModality) {
+                    url += `&modality=${encodeURIComponent(this.currentModality)}`;
                 }
             }
 
@@ -264,11 +412,60 @@ class PromptsPage {
                     render: (value) => createBadge(value, 'primary')
                 },
                 {
+                    key: 'classification',
+                    label: 'Classification',
+                    sortable: false,
+                    render: (value, row) => {
+                        const badges = [];
+
+                        if (row.purpose) {
+                            const icon = row.purpose === 'offensive' ? '⚔️' : '🛡️';
+                            const color = row.purpose === 'offensive' ? 'hsl(var(--destructive))' : 'hsl(var(--success))';
+                            badges.push(`<span style="
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 0.25rem;
+                                padding: 0.125rem 0.5rem;
+                                background: ${color}33;
+                                color: ${color};
+                                border-radius: var(--radius-sm);
+                                font-size: 0.75rem;
+                                font-weight: 600;
+                            ">${icon} ${row.purpose}</span>`);
+                        }
+
+                        if (row.risk_category) {
+                            const riskIcons = {
+                                'security': '🔒',
+                                'safety': '⚠️',
+                                'ethics': '🎭',
+                                'compliance': '📋',
+                                'misinformation': '📰'
+                            };
+                            const icon = riskIcons[row.risk_category] || '⚠️';
+                            badges.push(`<span style="
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 0.25rem;
+                                padding: 0.125rem 0.5rem;
+                                background: hsl(var(--muted) / 0.3);
+                                color: hsl(var(--foreground));
+                                border-radius: var(--radius-sm);
+                                font-size: 0.75rem;
+                            ">${icon} ${row.risk_category}</span>`);
+                        }
+
+                        return badges.length > 0
+                            ? `<div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">${badges.join('')}</div>`
+                            : '<span style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">-</span>';
+                    }
+                },
+                {
                     key: 'payload',
                     label: 'Payload',
                     sortable: false,
                     render: (value) => {
-                        const truncated = value.length > 80 ? value.substring(0, 80) + '...' : value;
+                        const truncated = value.length > 60 ? value.substring(0, 60) + '...' : value;
                         return `<span style="font-family: monospace; font-size: 0.875rem; color: hsl(var(--foreground));">${truncated}</span>`;
                     }
                 },
@@ -486,6 +683,81 @@ class PromptsPage {
                     ${createBadge(prompt.category, 'primary')}
                 </div>
             </div>
+
+            ${(prompt.purpose || prompt.risk_category || prompt.technique || prompt.modality) ? `
+                <div style="margin-bottom: 1.5rem;">
+                    <strong style="font-size: 1rem; display: block; margin-bottom: 0.75rem;">Classification:</strong>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        ${prompt.purpose ? `
+                            <span style="
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 0.375rem;
+                                padding: 0.375rem 0.75rem;
+                                background: ${prompt.purpose === 'offensive' ? 'hsl(var(--destructive) / 0.15)' : 'hsl(var(--success) / 0.15)'};
+                                color: ${prompt.purpose === 'offensive' ? 'hsl(var(--destructive))' : 'hsl(var(--success))'};
+                                border: 1px solid ${prompt.purpose === 'offensive' ? 'hsl(var(--destructive) / 0.3)' : 'hsl(var(--success) / 0.3)'};
+                                border-radius: var(--radius-md);
+                                font-size: 0.875rem;
+                                font-weight: 600;
+                            ">
+                                ${prompt.purpose === 'offensive' ? '⚔️ Offensive' : '🛡️ Defensive'}
+                            </span>
+                        ` : ''}
+                        ${prompt.risk_category ? `
+                            <span style="
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 0.375rem;
+                                padding: 0.375rem 0.75rem;
+                                background: hsl(var(--muted) / 0.3);
+                                color: hsl(var(--foreground));
+                                border: 1px solid hsl(var(--border));
+                                border-radius: var(--radius-md);
+                                font-size: 0.875rem;
+                            ">
+                                ${{
+                                    'security': '🔒',
+                                    'safety': '⚠️',
+                                    'ethics': '🎭',
+                                    'compliance': '📋',
+                                    'misinformation': '📰'
+                                }[prompt.risk_category] || '⚠️'} ${prompt.risk_category}
+                            </span>
+                        ` : ''}
+                        ${prompt.technique ? `
+                            <span style="
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 0.375rem;
+                                padding: 0.375rem 0.75rem;
+                                background: hsl(var(--accent) / 0.3);
+                                color: hsl(var(--foreground));
+                                border: 1px solid hsl(var(--border));
+                                border-radius: var(--radius-md);
+                                font-size: 0.875rem;
+                            ">
+                                🔧 ${prompt.technique.replace(/_/g, ' ')}
+                            </span>
+                        ` : ''}
+                        ${prompt.modality ? `
+                            <span style="
+                                display: inline-flex;
+                                align-items: center;
+                                gap: 0.375rem;
+                                padding: 0.375rem 0.75rem;
+                                background: hsl(var(--muted) / 0.2);
+                                color: hsl(var(--muted-foreground));
+                                border: 1px solid hsl(var(--border));
+                                border-radius: var(--radius-md);
+                                font-size: 0.875rem;
+                            ">
+                                🎨 ${prompt.modality.replace(/_/g, ' ')}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            ` : ''}
 
             <div style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">

@@ -16,12 +16,42 @@ db = ArsenalDB()
 
 @multiturn_bp.route('/campaigns', methods=['GET'])
 def list_campaigns():
-    """Get all multi-turn campaigns"""
-    campaigns = db.get_all_campaigns()
+    """Get all multi-turn campaigns with success rates"""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path(__file__).parent.parent.parent / "arsenal.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Get campaigns with evaluation statistics
+    campaigns = cursor.execute('''
+        SELECT
+            c.*,
+            COUNT(e.id) as total_evaluations,
+            SUM(CASE WHEN e.goal_achieved = 1 THEN 1 ELSE 0 END) as goals_achieved,
+            AVG(e.progress) as avg_progress
+        FROM multi_turn_campaigns c
+        LEFT JOIN multi_turn_evaluations e ON c.id = e.campaign_id
+        GROUP BY c.id
+        ORDER BY c.created_at DESC
+    ''').fetchall()
+
+    data = []
+    for row in campaigns:
+        campaign = dict(row)
+        total = campaign.get('total_evaluations', 0)
+        achieved = campaign.get('goals_achieved', 0)
+        campaign['success_rate'] = round((achieved / total * 100), 1) if total > 0 else 0
+        campaign['avg_progress'] = round((campaign.get('avg_progress', 0) or 0) * 100, 1)
+        data.append(campaign)
+
+    conn.close()
 
     return jsonify({
         'success': True,
-        'data': campaigns
+        'data': data
     })
 
 

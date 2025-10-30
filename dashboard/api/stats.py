@@ -122,3 +122,110 @@ def get_timeline():
         'success': True,
         'data': timeline
     })
+
+
+@stats_bp.route('/classification', methods=['GET'])
+def get_classification_stats():
+    """Get classification-based statistics (purpose, risk_category, technique)"""
+    import sqlite3
+
+    conn = sqlite3.connect(db.db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Purpose statistics
+    cursor.execute('''
+        SELECT
+            p.purpose,
+            COUNT(DISTINCT p.id) as prompt_count,
+            COUNT(tr.id) as test_count,
+            SUM(CASE WHEN tr.success = 1 THEN 1 ELSE 0 END) as success_count,
+            AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100 as success_rate
+        FROM prompts p
+        LEFT JOIN test_results tr ON p.id = tr.prompt_id
+        WHERE p.purpose IS NOT NULL
+        GROUP BY p.purpose
+        ORDER BY prompt_count DESC
+    ''')
+    purpose_stats = [dict(row) for row in cursor.fetchall()]
+
+    # Risk category statistics
+    cursor.execute('''
+        SELECT
+            p.risk_category,
+            COUNT(DISTINCT p.id) as prompt_count,
+            COUNT(tr.id) as test_count,
+            SUM(CASE WHEN tr.success = 1 THEN 1 ELSE 0 END) as success_count,
+            AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100 as success_rate
+        FROM prompts p
+        LEFT JOIN test_results tr ON p.id = tr.prompt_id
+        WHERE p.risk_category IS NOT NULL
+        GROUP BY p.risk_category
+        ORDER BY prompt_count DESC
+    ''')
+    risk_stats = [dict(row) for row in cursor.fetchall()]
+
+    # Technique statistics
+    cursor.execute('''
+        SELECT
+            p.technique,
+            COUNT(DISTINCT p.id) as prompt_count,
+            COUNT(tr.id) as test_count,
+            SUM(CASE WHEN tr.success = 1 THEN 1 ELSE 0 END) as success_count,
+            AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100 as success_rate
+        FROM prompts p
+        LEFT JOIN test_results tr ON p.id = tr.prompt_id
+        WHERE p.technique IS NOT NULL
+        GROUP BY p.technique
+        ORDER BY prompt_count DESC
+        LIMIT 10
+    ''')
+    technique_stats = [dict(row) for row in cursor.fetchall()]
+
+    # Modality statistics
+    cursor.execute('''
+        SELECT
+            p.modality,
+            COUNT(DISTINCT p.id) as prompt_count,
+            COUNT(tr.id) as test_count,
+            SUM(CASE WHEN tr.success = 1 THEN 1 ELSE 0 END) as success_count,
+            AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100 as success_rate
+        FROM prompts p
+        LEFT JOIN test_results tr ON p.id = tr.prompt_id
+        WHERE p.modality IS NOT NULL
+        GROUP BY p.modality
+        ORDER BY prompt_count DESC
+    ''')
+    modality_stats = [dict(row) for row in cursor.fetchall()]
+
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'purpose': purpose_stats,
+            'risk_category': risk_stats,
+            'technique': technique_stats,
+            'modality': modality_stats
+        }
+    })
+
+
+@stats_bp.route('/categories', methods=['GET'])
+def get_categories_with_classification():
+    """Get categories with classification info"""
+    categories = db.get_categories()
+
+    # Group by purpose
+    offensive = [c for c in categories if c.get('purpose') == 'offensive']
+    defensive = [c for c in categories if c.get('purpose') == 'defensive']
+
+    return jsonify({
+        'success': True,
+        'data': {
+            'all': categories,
+            'offensive': offensive,
+            'defensive': defensive,
+            'total': len(categories)
+        }
+    })

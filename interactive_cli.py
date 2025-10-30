@@ -831,27 +831,93 @@ class PromptArsenal:
     # === ARSENAL ===
 
     def arsenal_github_import(self):
-        """Import prompts from GitHub datasets"""
-        console.print("\n[bold yellow]GitHub 데이터셋 가져오기[/bold yellow]")
+        """Import prompts from GitHub datasets with classification"""
+        console.print("\n[bold yellow]데이터셋 가져오기[/bold yellow]")
 
         from text.github_importer import GitHubImporter
         importer = GitHubImporter(self.db)
 
-        # Show available datasets with numbers
-        table = Table(title="Available Datasets")
-        table.add_column("No.", style="magenta", justify="right")
-        table.add_column("Name", style="cyan")
-        table.add_column("Description", style="white")
-        table.add_column("Category", style="green")
+        # 선택 메뉴
+        console.print("\n[bold]가져오기 옵션:[/bold]")
+        console.print("  [green]1[/green]. 전체 가져오기 (모든 데이터셋)")
+        console.print("  [green]2[/green]. 목적별 선택 (Offensive/Defensive)")
+        console.print("  [green]3[/green]. 위험 도메인별 선택")
+        console.print("  [green]4[/green]. 개별 선택 (테이블에서 선택)")
+
+        import_mode = ask("가져오기 모드", choices=["1", "2", "3", "4"], default="1")
 
         dataset_list = list(importer.DATASETS.items())
-        for idx, (name, info) in enumerate(dataset_list, 1):
-            table.add_row(str(idx), name, info['description'], info['category'])
 
-        console.print(table)
+        # Mode 1: 전체 가져오기
+        if import_mode == "1":
+            choice = "all"
 
-        console.print("\n[dim]💡 숫자 또는 이름 입력, 'all' 입력 시 모든 데이터셋 가져오기[/dim]")
-        choice = ask("\n선택 (번호/이름/all)", default="all")
+        # Mode 2: 목적별 선택
+        elif import_mode == "2":
+            console.print("\n[bold]목적별 선택:[/bold]")
+            console.print("  [red]1[/red]. ⚔️  OFFENSIVE (공격적 테스팅 - 정보 추출/제약 우회)")
+            console.print("  [green]2[/green]. 🛡️  DEFENSIVE (방어적 테스팅 - 안전성 검증)")
+            console.print("  [cyan]3[/cyan]. 전체")
+
+            purpose_choice = ask("선택", choices=["1", "2", "3"], default="3")
+
+            if purpose_choice == "1":
+                dataset_list = [(name, info) for name, info in dataset_list if info['purpose'] == 'offensive']
+            elif purpose_choice == "2":
+                dataset_list = [(name, info) for name, info in dataset_list if info['purpose'] == 'defensive']
+
+            if not dataset_list:
+                console.print("[yellow]해당 분류의 데이터셋이 없습니다.[/yellow]")
+                return
+
+            choice = "all"
+
+        # Mode 3: 위험 도메인별 선택
+        elif import_mode == "3":
+            # 위험 도메인 목록 추출
+            risk_categories = sorted(set(info['risk_category'] for _, info in dataset_list if info.get('risk_category')))
+
+            console.print("\n[bold]위험 도메인 선택:[/bold]")
+            for idx, risk_cat in enumerate(risk_categories, 1):
+                icon = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰"}.get(risk_cat, "❓")
+                count = sum(1 for _, info in dataset_list if info.get('risk_category') == risk_cat)
+                console.print(f"  [cyan]{idx}[/cyan]. {icon} {risk_cat} ({count}개 데이터셋)")
+
+            risk_choice = ask(f"선택 (1-{len(risk_categories)})", default="1")
+
+            try:
+                idx = int(risk_choice) - 1
+                if 0 <= idx < len(risk_categories):
+                    selected_risk = risk_categories[idx]
+                    dataset_list = [(name, info) for name, info in dataset_list if info.get('risk_category') == selected_risk]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
+
+            choice = "all"
+
+        # Mode 4: 개별 선택
+        else:
+            # Show available datasets with classification
+            table = Table(title="Available Datasets")
+            table.add_column("No.", style="magenta", justify="right")
+            table.add_column("Purpose", style="cyan")
+            table.add_column("Risk", style="yellow")
+            table.add_column("Name", style="white")
+            table.add_column("Description", style="dim")
+
+            for idx, (name, info) in enumerate(dataset_list, 1):
+                purpose_icon = "⚔️" if info['purpose'] == 'offensive' else "🛡️"
+                risk_icon = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰"}.get(info['risk_category'], "❓")
+                table.add_row(str(idx), f"{purpose_icon} {info['purpose']}", f"{risk_icon} {info['risk_category']}", name, info['description'][:50] + "..." if len(info['description']) > 50 else info['description'])
+
+            console.print(table)
+
+            console.print("\n[dim]💡 숫자 또는 이름 입력, 'all' 입력 시 모든 데이터셋 가져오기[/dim]")
+            choice = ask("\n선택 (번호/이름/all)", default="all")
 
         # 숫자 선택 처리
         if choice.isdigit():
@@ -864,16 +930,17 @@ class PromptArsenal:
         else:
             dataset_name = choice
 
-        # 전체 가져오기
+        # 전체 가져오기 (필터링된 데이터셋)
         if dataset_name.lower() == 'all':
             try:
-                console.print(f"\n[cyan]📦 총 {len(importer.DATASETS)}개 데이터셋 가져오기 시작...[/cyan]\n")
+                console.print(f"\n[cyan]📦 총 {len(dataset_list)}개 데이터셋 가져오기 시작...[/cyan]\n")
 
                 results = {}
                 total_count = 0
 
-                for idx, (name, info) in enumerate(importer.DATASETS.items(), 1):
-                    console.print(f"[yellow][{idx}/{len(importer.DATASETS)}][/yellow] {name} ({info['category']})...")
+                for idx, (name, info) in enumerate(dataset_list, 1):
+                    purpose_icon = "⚔️" if info['purpose'] == 'offensive' else "🛡️"
+                    console.print(f"[yellow][{idx}/{len(dataset_list)}][/yellow] {purpose_icon} {name} ({info['category']})...")
 
                     with console.status(f"[cyan]Importing...", spinner="dots"):
                         count = importer.import_to_database(name)
@@ -883,14 +950,17 @@ class PromptArsenal:
                     console.print(f"  [green]✓[/green] {count}개 추가\n")
 
                 # 요약 테이블
-                summary_table = Table(title=f"[bold green]전체 가져오기 완료![/bold green] 총 {total_count}개 프롬프트 추가")
+                summary_table = Table(title=f"[bold green]가져오기 완료![/bold green] 총 {total_count}개 프롬프트 추가")
                 summary_table.add_column("Dataset", style="cyan")
-                summary_table.add_column("Category", style="yellow")
+                summary_table.add_column("Purpose", style="magenta")
+                summary_table.add_column("Risk", style="yellow")
                 summary_table.add_column("Added", style="green", justify="right")
 
                 for name, count in results.items():
-                    category = importer.DATASETS[name]['category']
-                    summary_table.add_row(name, category, str(count))
+                    info = importer.DATASETS[name]
+                    purpose_icon = "⚔️" if info['purpose'] == 'offensive' else "🛡️"
+                    risk_icon = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰"}.get(info['risk_category'], "❓")
+                    summary_table.add_row(name, f"{purpose_icon} {info['purpose']}", f"{risk_icon} {info['risk_category']}", str(count))
 
                 console.print("\n")
                 console.print(summary_table)
@@ -1472,11 +1542,24 @@ class PromptArsenal:
         console.print("\n[bold yellow]텍스트 프롬프트 검색[/bold yellow]")
 
         keyword = ask("검색어")
-        category = ask("카테고리 (선택, Enter로 전체)", default="")
+
+        # Filter options
+        console.print("\n[cyan]추가 필터 (선택사항, Enter로 건너뛰기):[/cyan]")
+        category = ask("카테고리", default="")
+
+        console.print("\n[dim]분류 필터 (선택사항):[/dim]")
+        purpose = ask("목적 (offensive/defensive)", default="")
+        risk_category = ask("위험 도메인 (security/safety/ethics/compliance/misinformation)", default="")
+        technique = ask("기법 (jailbreak/prompt_injection/adversarial/...)", default="")
+        modality = ask("모달리티 (text_only/multimodal/multilingual)", default="")
 
         results = self.db.search_prompts(
             keyword=keyword,
             category=category if category else None,
+            purpose=purpose if purpose else None,
+            risk_category=risk_category if risk_category else None,
+            technique=technique if technique else None,
+            modality=modality if modality else None,
             limit=20
         )
 
@@ -1487,15 +1570,23 @@ class PromptArsenal:
         table = Table(title=f"검색 결과: {len(results)}개")
         table.add_column("ID", style="cyan", width=6)
         table.add_column("Category", style="green")
-        table.add_column("Payload", style="white", max_width=60)
-        table.add_column("Source", style="blue")
+        table.add_column("Purpose", style="magenta", width=10)
+        table.add_column("Risk", style="yellow", width=12)
+        table.add_column("Payload", style="white", max_width=50)
+        table.add_column("Source", style="blue", width=15)
 
         for result in results:
+            purpose_icon = "⚔️" if result.get('purpose') == 'offensive' else "🛡️"
+            risk_icons = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰"}
+            risk_icon = risk_icons.get(result.get('risk_category'), "")
+
             table.add_row(
                 str(result['id']),
                 result['category'],
-                result['payload'][:60] + "..." if len(result['payload']) > 60 else result['payload'],
-                result['source'] or ""
+                f"{purpose_icon} {result.get('purpose', 'N/A')[:3]}",
+                f"{risk_icon} {result.get('risk_category', 'N/A')[:8]}",
+                result['payload'][:50] + "..." if len(result['payload']) > 50 else result['payload'],
+                result['source'][:15] or ""
             )
 
         console.print(table)
@@ -1711,7 +1802,105 @@ class PromptArsenal:
         else:
             console.print("[dim]모델별 테스트 데이터 없음 (최소 3회 이상 테스트 필요)[/dim]")
 
-        # === 5. 캠페인 전략별 성공률 ===
+        # === 5. 🆕 분류별 통계 ===
+        console.print("\n[bold cyan]📊 분류별 통계 (Purpose, Risk, Technique)[/bold cyan]")
+
+        import sqlite3
+        conn = sqlite3.connect('arsenal.db')
+        cursor = conn.cursor()
+
+        # Purpose statistics
+        cursor.execute('''
+            SELECT purpose, COUNT(*) as count,
+                   AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100 as success_rate
+            FROM prompts p
+            LEFT JOIN test_results tr ON p.id = tr.prompt_id
+            WHERE purpose IS NOT NULL
+            GROUP BY purpose
+            ORDER BY count DESC
+        ''')
+        purpose_stats = cursor.fetchall()
+
+        if purpose_stats:
+            purpose_table = Table(title="🎯 목적별 (Purpose)", show_header=True, header_style="bold magenta")
+            purpose_table.add_column("Purpose", style="cyan", width=15)
+            purpose_table.add_column("Icon", style="white", width=5)
+            purpose_table.add_column("Prompts", style="white", justify="right", width=10)
+            purpose_table.add_column("Success Rate", style="bold green", justify="right", width=14)
+
+            for purpose, count, success_rate in purpose_stats:
+                icon = "⚔️" if purpose == 'offensive' else "🛡️"
+                rate_display = f"{success_rate:.1f}%" if success_rate is not None else "N/A"
+                purpose_table.add_row(purpose, icon, f"{count:,}", rate_display)
+
+            console.print(purpose_table)
+
+        # Risk category statistics
+        cursor.execute('''
+            SELECT risk_category, COUNT(*) as count,
+                   AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100 as success_rate
+            FROM prompts p
+            LEFT JOIN test_results tr ON p.id = tr.prompt_id
+            WHERE risk_category IS NOT NULL
+            GROUP BY risk_category
+            ORDER BY count DESC
+        ''')
+        risk_stats = cursor.fetchall()
+
+        if risk_stats:
+            risk_table = Table(title="⚠️ 위험 도메인별 (Risk Category)", show_header=True, header_style="bold magenta")
+            risk_table.add_column("Risk Category", style="cyan", width=18)
+            risk_table.add_column("Icon", style="white", width=5)
+            risk_table.add_column("Prompts", style="white", justify="right", width=10)
+            risk_table.add_column("Success Rate", style="bold green", justify="right", width=14)
+
+            risk_icons = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰"}
+            for risk_cat, count, success_rate in risk_stats:
+                icon = risk_icons.get(risk_cat, "❓")
+                rate_display = f"{success_rate:.1f}%" if success_rate is not None else "N/A"
+                risk_table.add_row(risk_cat, icon, f"{count:,}", rate_display)
+
+            console.print(risk_table)
+
+        # Technique statistics
+        cursor.execute('''
+            SELECT technique, COUNT(*) as count,
+                   AVG(CASE WHEN tr.success = 1 THEN 1.0 ELSE 0.0 END) * 100 as success_rate
+            FROM prompts p
+            LEFT JOIN test_results tr ON p.id = tr.prompt_id
+            WHERE technique IS NOT NULL
+            GROUP BY technique
+            ORDER BY count DESC
+            LIMIT 10
+        ''')
+        tech_stats = cursor.fetchall()
+
+        if tech_stats:
+            tech_table = Table(title="🔧 기법별 (Top 10 Techniques)", show_header=True, header_style="bold magenta")
+            tech_table.add_column("Technique", style="cyan", width=25)
+            tech_table.add_column("Icon", style="white", width=5)
+            tech_table.add_column("Prompts", style="white", justify="right", width=10)
+            tech_table.add_column("Success Rate", style="bold green", justify="right", width=14)
+
+            tech_icons = {
+                "jailbreak": "🔓",
+                "prompt_injection": "💉",
+                "adversarial": "⚡",
+                "fuzzing": "🎲",
+                "safety_benchmark": "📊",
+                "robustness_test": "🛡️",
+                "content_filter_test": "🔍"
+            }
+            for tech, count, success_rate in tech_stats:
+                icon = tech_icons.get(tech, "🔧")
+                rate_display = f"{success_rate:.1f}%" if success_rate is not None else "N/A"
+                tech_table.add_row(tech, icon, f"{count:,}", rate_display)
+
+            console.print(tech_table)
+
+        conn.close()
+
+        # === 6. 캠페인 전략별 성공률 ===
         console.print("\n[bold cyan]🎯 Multiturn 전략별 성공률[/bold cyan]")
         campaign_stats = self.db.get_campaign_stats()
 
@@ -2197,28 +2386,173 @@ class PromptArsenal:
             return
 
         # Batch mode continues...
-        # Select category
-        categories = self.db.get_categories()
-        if not categories:
-            console.print("[yellow]프롬프트가 없습니다.[/yellow]")
-            return
+        # Select filter mode
+        console.print("\n[bold cyan]필터 모드 선택:[/bold cyan]")
+        console.print("  [green]1[/green]. 카테고리별 (기존 방식)")
+        console.print("  [green]2[/green]. 목적별 (Offensive/Defensive)")
+        console.print("  [green]3[/green]. 위험 도메인별 (Security/Safety/Ethics/...)")
+        console.print("  [green]4[/green]. 기법별 (Jailbreak/Prompt Injection/...)")
+        console.print("  [green]5[/green]. 모달리티별 (Text Only/Multimodal/Multilingual)")
 
-        console.print("\n[bold]사용 가능한 카테고리:[/bold]")
-        for idx, cat in enumerate(categories, 1):
-            console.print(f"  [cyan]{idx}.[/cyan] {cat['category']} ({cat['prompt_count']}개)")
+        filter_mode = ask("필터 모드", choices=["1", "2", "3", "4", "5"], default="1")
 
-        cat_choice = ask(f"\n카테고리 선택 (1-{len(categories)})", default="1")
+        # Initialize filter criteria
+        filter_criteria = {}
 
-        try:
-            idx = int(cat_choice) - 1
-            if 0 <= idx < len(categories):
-                category = categories[idx]['category']
-            else:
-                console.print("[red]잘못된 선택입니다.[/red]")
+        if filter_mode == "1":
+            # Category filter (original)
+            categories = self.db.get_categories()
+            if not categories:
+                console.print("[yellow]프롬프트가 없습니다.[/yellow]")
                 return
-        except ValueError:
-            console.print("[red]숫자를 입력하세요.[/red]")
-            return
+
+            console.print("\n[bold]사용 가능한 카테고리:[/bold]")
+
+            # Group by purpose
+            offensive_cats = [c for c in categories if c['purpose'] == 'offensive']
+            defensive_cats = [c for c in categories if c['purpose'] == 'defensive']
+
+            if offensive_cats:
+                console.print("\n[bold red]⚔️  OFFENSIVE (공격적 테스팅 - 정보 추출/제약 우회)[/bold red]")
+                for idx, cat in enumerate(offensive_cats, 1):
+                    purpose_icon = "⚔️"
+                    risk_icon = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "unknown": "❓"}.get(cat['risk_category'], "")
+                    console.print(f"  [cyan]{idx}.[/cyan] {purpose_icon} {risk_icon} {cat['category']} ({cat['prompt_count']}개) - {cat['risk_category']}/{cat['technique']}")
+
+            if defensive_cats:
+                start_idx = len(offensive_cats) + 1
+                console.print("\n[bold green]🛡️  DEFENSIVE (방어적 테스팅 - 안전성 검증)[/bold green]")
+                for idx, cat in enumerate(defensive_cats, start_idx):
+                    purpose_icon = "🛡️"
+                    risk_icon = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰", "unknown": "❓"}.get(cat['risk_category'], "")
+                    console.print(f"  [cyan]{idx}.[/cyan] {purpose_icon} {risk_icon} {cat['category']} ({cat['prompt_count']}개) - {cat['risk_category']}/{cat['technique']}")
+
+            cat_choice = ask(f"\n카테고리 선택 (1-{len(categories)})", default="1")
+
+            try:
+                idx = int(cat_choice) - 1
+                if 0 <= idx < len(categories):
+                    filter_criteria['category'] = categories[idx]['category']
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
+
+        elif filter_mode == "2":
+            # Purpose filter
+            console.print("\n[bold]목적별 선택:[/bold]")
+            console.print("  [red]1[/red]. ⚔️  OFFENSIVE (공격적 테스팅 - 정보 추출/제약 우회)")
+            console.print("  [green]2[/green]. 🛡️  DEFENSIVE (방어적 테스팅 - 안전성 검증)")
+
+            purpose_choice = ask("선택", choices=["1", "2"], default="1")
+            filter_criteria['purpose'] = 'offensive' if purpose_choice == "1" else 'defensive'
+
+        elif filter_mode == "3":
+            # Risk category filter
+            import sqlite3
+            conn = sqlite3.connect('arsenal.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT DISTINCT risk_category, COUNT(*) FROM prompts WHERE risk_category IS NOT NULL GROUP BY risk_category ORDER BY COUNT(*) DESC')
+            risk_categories = cursor.fetchall()
+            conn.close()
+
+            if not risk_categories:
+                console.print("[yellow]위험 도메인이 없습니다.[/yellow]")
+                return
+
+            console.print("\n[bold]위험 도메인 선택:[/bold]")
+            risk_icons = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰"}
+            for idx, (risk_cat, count) in enumerate(risk_categories, 1):
+                icon = risk_icons.get(risk_cat, "❓")
+                console.print(f"  [cyan]{idx}[/cyan]. {icon} {risk_cat} ({count:,}개)")
+
+            risk_choice = ask(f"선택 (1-{len(risk_categories)})", default="1")
+            try:
+                idx = int(risk_choice) - 1
+                if 0 <= idx < len(risk_categories):
+                    filter_criteria['risk_category'] = risk_categories[idx][0]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
+
+        elif filter_mode == "4":
+            # Technique filter
+            import sqlite3
+            conn = sqlite3.connect('arsenal.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT DISTINCT technique, COUNT(*) FROM prompts WHERE technique IS NOT NULL GROUP BY technique ORDER BY COUNT(*) DESC')
+            techniques = cursor.fetchall()
+            conn.close()
+
+            if not techniques:
+                console.print("[yellow]기법이 없습니다.[/yellow]")
+                return
+
+            console.print("\n[bold]기법 선택:[/bold]")
+            technique_icons = {
+                "jailbreak": "🔓",
+                "prompt_injection": "💉",
+                "adversarial": "⚡",
+                "fuzzing": "🎲",
+                "safety_benchmark": "📊",
+                "robustness_test": "🛡️",
+                "content_filter_test": "🔍"
+            }
+            for idx, (tech, count) in enumerate(techniques, 1):
+                icon = technique_icons.get(tech, "🔧")
+                console.print(f"  [cyan]{idx}[/cyan]. {icon} {tech} ({count:,}개)")
+
+            tech_choice = ask(f"선택 (1-{len(techniques)})", default="1")
+            try:
+                idx = int(tech_choice) - 1
+                if 0 <= idx < len(techniques):
+                    filter_criteria['technique'] = techniques[idx][0]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
+
+        elif filter_mode == "5":
+            # Modality filter
+            import sqlite3
+            conn = sqlite3.connect('arsenal.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT DISTINCT modality, COUNT(*) FROM prompts WHERE modality IS NOT NULL GROUP BY modality ORDER BY COUNT(*) DESC')
+            modalities = cursor.fetchall()
+            conn.close()
+
+            if not modalities:
+                console.print("[yellow]모달리티가 없습니다.[/yellow]")
+                return
+
+            console.print("\n[bold]모달리티 선택:[/bold]")
+            modality_icons = {
+                "text_only": "📝",
+                "multimodal": "🎨",
+                "multilingual": "🌐"
+            }
+            for idx, (modal, count) in enumerate(modalities, 1):
+                icon = modality_icons.get(modal, "❓")
+                console.print(f"  [cyan]{idx}[/cyan]. {icon} {modal} ({count:,}개)")
+
+            modal_choice = ask(f"선택 (1-{len(modalities)})", default="1")
+            try:
+                idx = int(modal_choice) - 1
+                if 0 <= idx < len(modalities):
+                    filter_criteria['modality'] = modalities[idx][0]
+                else:
+                    console.print("[red]잘못된 선택입니다.[/red]")
+                    return
+            except ValueError:
+                console.print("[red]숫자를 입력하세요.[/red]")
+                return
 
         limit = int(ask("테스트 개수", default="10"))
 
@@ -2252,20 +2586,46 @@ class PromptArsenal:
             base_url=profile.get('base_url')
         )
 
-        # Get prompts
-        prompts = self.db.get_prompts(category=category, limit=limit)
+        # Get prompts using filter criteria
+        prompts = self.db.get_prompts(
+            category=filter_criteria.get('category'),
+            purpose=filter_criteria.get('purpose'),
+            risk_category=filter_criteria.get('risk_category'),
+            technique=filter_criteria.get('technique'),
+            modality=filter_criteria.get('modality'),
+            limit=limit
+        )
 
         if not prompts:
-            console.print(f"[yellow]카테고리 '{category}'에 프롬프트가 없습니다.[/yellow]")
+            console.print(f"[yellow]선택한 필터에 맞는 프롬프트가 없습니다.[/yellow]")
             return
 
         # Mission briefing
         from rich.panel import Panel
         console.print()
+
+        # Build filter description
+        filter_desc = []
+        if filter_criteria.get('category'):
+            filter_desc.append(f"Category: {filter_criteria['category']}")
+        if filter_criteria.get('purpose'):
+            purpose_icon = "⚔️" if filter_criteria['purpose'] == 'offensive' else "🛡️"
+            filter_desc.append(f"{purpose_icon} Purpose: {filter_criteria['purpose']}")
+        if filter_criteria.get('risk_category'):
+            risk_icons = {"security": "🔒", "safety": "⚠️", "ethics": "🎭", "compliance": "📋", "misinformation": "📰"}
+            icon = risk_icons.get(filter_criteria['risk_category'], "")
+            filter_desc.append(f"{icon} Risk: {filter_criteria['risk_category']}")
+        if filter_criteria.get('technique'):
+            filter_desc.append(f"Technique: {filter_criteria['technique']}")
+        if filter_criteria.get('modality'):
+            filter_desc.append(f"Modality: {filter_criteria['modality']}")
+
+        filter_text = "\n".join(filter_desc) if filter_desc else "All prompts"
+
         console.print(Panel(
             f"[bold white]Target:[/bold white] {profile['provider']}/{profile['model']}\n"
             f"[bold white]Payloads:[/bold white] {len(prompts)}\n"
-            f"[bold white]Category:[/bold white] {category}",
+            f"[bold white]Filter:[/bold white]\n{filter_text}",
             title="[bold red]⚔️  MISSION BRIEFING[/bold red]",
             border_style="red"
         ))

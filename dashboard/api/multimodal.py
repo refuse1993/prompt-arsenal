@@ -28,80 +28,83 @@ def list_media():
 
     offset = (page - 1) * limit
 
-    # If model filter is provided, use custom query with JOIN
+    # Always use custom query with test statistics
+    db_path = Path(__file__).parent.parent.parent / "arsenal.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Query with test statistics
+    query = '''
+        SELECT m.*,
+               COUNT(t.id) as test_count,
+               SUM(CASE WHEN t.success = 1 THEN 1 ELSE 0 END) as success_count,
+               MAX(t.tested_at) as last_tested_at
+        FROM media_arsenal m
+        LEFT JOIN multimodal_test_results t ON m.id = t.media_id
+        WHERE 1=1
+    '''
+    params = []
+
+    if media_type:
+        query += ' AND m.media_type = ?'
+        params.append(media_type)
+
+    if attack_type:
+        query += ' AND m.attack_type = ?'
+        params.append(attack_type)
+
     if model:
-        db_path = Path(__file__).parent.parent.parent / "arsenal.db"
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        provider, model_name = model.split('/', 1) if '/' in model else (model, None)
+        query += ' AND t.provider = ?'
+        params.append(provider)
+        if model_name:
+            query += ' AND t.model = ?'
+            params.append(model_name)
 
-        query = '''
-            SELECT DISTINCT m.*
-            FROM media_arsenal m
-            LEFT JOIN multimodal_test_results t ON m.id = t.media_id
-            WHERE 1=1
-        '''
-        params = []
+    query += ' GROUP BY m.id ORDER BY last_tested_at DESC, m.created_at DESC LIMIT ? OFFSET ?'
+    params.extend([limit, offset])
 
-        if media_type:
-            query += ' AND m.media_type = ?'
-            params.append(media_type)
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
 
-        if attack_type:
-            query += ' AND m.attack_type = ?'
-            params.append(attack_type)
+    # Calculate success rates
+    media = []
+    for row in rows:
+        item = dict(row)
+        test_count = item.get('test_count', 0)
+        success_count = item.get('success_count', 0)
+        item['success_rate'] = (success_count / test_count * 100) if test_count > 0 else 0
+        media.append(item)
 
-        if model:
-            provider, model_name = model.split('/', 1) if '/' in model else (model, None)
-            query += ' AND t.provider = ?'
-            params.append(provider)
-            if model_name:
-                query += ' AND t.model = ?'
-                params.append(model_name)
+    # Get total count with same filters
+    count_query = '''
+        SELECT COUNT(DISTINCT m.id)
+        FROM media_arsenal m
+        LEFT JOIN multimodal_test_results t ON m.id = t.media_id
+        WHERE 1=1
+    '''
+    count_params = []
 
-        query += ' ORDER BY m.created_at DESC LIMIT ? OFFSET ?'
-        params.extend([limit, offset])
+    if media_type:
+        count_query += ' AND m.media_type = ?'
+        count_params.append(media_type)
 
-        cursor.execute(query, params)
-        media = [dict(row) for row in cursor.fetchall()]
+    if attack_type:
+        count_query += ' AND m.attack_type = ?'
+        count_params.append(attack_type)
 
-        # Get total count with same filters
-        count_query = '''
-            SELECT COUNT(DISTINCT m.id)
-            FROM media_arsenal m
-            LEFT JOIN multimodal_test_results t ON m.id = t.media_id
-            WHERE 1=1
-        '''
-        count_params = []
+    if model:
+        provider, model_name = model.split('/', 1) if '/' in model else (model, None)
+        count_query += ' AND t.provider = ?'
+        count_params.append(provider)
+        if model_name:
+            count_query += ' AND t.model = ?'
+            count_params.append(model_name)
 
-        if media_type:
-            count_query += ' AND m.media_type = ?'
-            count_params.append(media_type)
-
-        if attack_type:
-            count_query += ' AND m.attack_type = ?'
-            count_params.append(attack_type)
-
-        if model:
-            provider, model_name = model.split('/', 1) if '/' in model else (model, None)
-            count_query += ' AND t.provider = ?'
-            count_params.append(provider)
-            if model_name:
-                count_query += ' AND t.model = ?'
-                count_params.append(model_name)
-
-        cursor.execute(count_query, count_params)
-        total = cursor.fetchone()[0]
-        conn.close()
-    else:
-        # Use existing database methods when no model filter
-        media = db.get_all_media(
-            media_type=media_type,
-            attack_type=attack_type,
-            limit=limit,
-            offset=offset
-        )
-        total = db.get_media_count(media_type=media_type, attack_type=attack_type)
+    cursor.execute(count_query, count_params)
+    total = cursor.fetchone()[0]
+    conn.close()
 
     return jsonify({
         'success': True,

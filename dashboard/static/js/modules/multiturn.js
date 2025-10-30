@@ -168,10 +168,32 @@ class MultiturnPage {
                     key: 'success_rate',
                     label: 'Success Rate',
                     sortable: true,
-                    render: (value) => {
-                        if (!value) return '-';
-                        const color = value > 70 ? 'success' : value > 50 ? 'warning' : 'danger';
-                        return createBadge(`${value}%`, color);
+                    render: (value, row) => {
+                        if (row.total_evaluations === 0) {
+                            return '<span style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">No evals</span>';
+                        }
+                        const rate = Math.round(value || 0);
+                        const color = rate >= 70 ? 'hsl(var(--success))' : rate >= 40 ? 'hsl(142.1 70.6% 45.3%)' : 'hsl(var(--muted-foreground))';
+                        return `
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="
+                                    flex: 1;
+                                    height: 6px;
+                                    background: hsl(var(--muted) / 0.3);
+                                    border-radius: 3px;
+                                    overflow: hidden;
+                                    max-width: 80px;
+                                ">
+                                    <div style="
+                                        height: 100%;
+                                        width: ${rate}%;
+                                        background: ${color};
+                                        transition: width 0.3s;
+                                    "></div>
+                                </div>
+                                <span style="font-weight: 600; color: ${color}; min-width: 3rem; font-size: 0.875rem;">${rate}%</span>
+                            </div>
+                        `;
                     }
                 },
                 {
@@ -261,9 +283,32 @@ class MultiturnPage {
                     key: 'success_rate',
                     label: 'Success Rate',
                     sortable: true,
-                    render: (value) => {
-                        const color = value > 50 ? 'success' : value > 20 ? 'warning' : 'danger';
-                        return createBadge(`${value}%`, color);
+                    render: (value, row) => {
+                        if (row.total_evaluations === 0) {
+                            return '<span style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">No evals</span>';
+                        }
+                        const rate = Math.round(value || 0);
+                        const color = rate >= 70 ? 'hsl(var(--success))' : rate >= 40 ? 'hsl(142.1 70.6% 45.3%)' : 'hsl(var(--muted-foreground))';
+                        return `
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="
+                                    flex: 1;
+                                    height: 6px;
+                                    background: hsl(var(--muted) / 0.3);
+                                    border-radius: 3px;
+                                    overflow: hidden;
+                                    max-width: 80px;
+                                ">
+                                    <div style="
+                                        height: 100%;
+                                        width: ${rate}%;
+                                        background: ${color};
+                                        transition: width 0.3s;
+                                    "></div>
+                                </div>
+                                <span style="font-weight: 600; color: ${color}; min-width: 3rem; font-size: 0.875rem;">${rate}%</span>
+                            </div>
+                        `;
                     }
                 },
                 {
@@ -334,24 +379,15 @@ class MultiturnPage {
                                 ">
                                     <div style="font-weight: 600; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
                                         <span>Turn ${conv.turn_number + 1}</span>
-                                        ${eval_data ? `
-                                            <span style="font-size: 0.75rem;">
-                                                ${eval_data.goal_achieved ? createBadge('Goal Achieved', 'success') : ''}
-                                                ${createBadge(`Progress: ${(eval_data.progress * 100).toFixed(0)}%`, 'secondary')}
-                                            </span>
-                                        ` : ''}
+                                        ${eval_data ? this.renderProgressIndicator(eval_data) : ''}
                                     </div>
                                     <div style="font-size: 0.875rem; margin-bottom: 0.5rem;">
                                         <strong>Prompt:</strong>
-                                        <div style="color: hsl(var(--muted-foreground)); margin-top: 0.25rem; white-space: pre-wrap;">
-                                            ${conv.prompt_text ? conv.prompt_text.substring(0, 200) + (conv.prompt_text.length > 200 ? '...' : '') : 'N/A'}
-                                        </div>
+<div style="color: hsl(var(--muted-foreground)); margin-top: 0.25rem; padding: 0.5rem; background: hsl(var(--muted) / 0.1); border-radius: 4px; max-height: 120px; overflow-y: auto; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${this.cleanText(conv.prompt_text)}</div>
                                     </div>
                                     <div style="font-size: 0.875rem;">
                                         <strong>Response:</strong>
-                                        <div style="color: hsl(var(--muted-foreground)); margin-top: 0.25rem; white-space: pre-wrap;">
-                                            ${conv.response ? conv.response.substring(0, 200) + (conv.response.length > 200 ? '...' : '') : 'N/A'}
-                                        </div>
+<div style="color: hsl(var(--muted-foreground)); margin-top: 0.25rem; padding: 0.5rem; background: hsl(var(--muted) / 0.1); border-radius: 4px; max-height: 120px; overflow-y: auto; line-height: 1.5; white-space: pre-wrap; word-break: break-word;">${this.cleanText(conv.response)}</div>
                                     </div>
                                 </div>
                             `}).join('')}
@@ -480,6 +516,96 @@ class MultiturnPage {
             'Deception': '#ec4899'
         };
         return colors[strategy] || '#64748b';
+    }
+
+    cleanText(text) {
+        if (!text) return 'N/A';
+
+        // 1. 각 줄의 앞뒤 공백 제거
+        // 2. 빈 줄 제거
+        // 3. 여러 개의 연속된 공백을 하나로
+        return text
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n')
+            .replace(/  +/g, ' ');
+    }
+
+    renderProgressIndicator(evalData) {
+        const progress = (evalData.progress * 100).toFixed(0);
+        const goalAchieved = evalData.goal_achieved;
+
+        // 진행상황에 따른 색상 및 아이콘 결정
+        let color, bgColor, icon, statusText;
+
+        if (goalAchieved) {
+            // 목표 달성 - 녹색
+            color = 'hsl(var(--success))';
+            bgColor = 'hsl(142.1 76.2% 36.3% / 0.1)';
+            icon = '✅';
+            statusText = 'Goal Achieved';
+        } else if (progress >= 70) {
+            // 높은 진행률 - 주황색 (거의 성공)
+            color = 'hsl(24.6 95% 53.1%)';
+            bgColor = 'hsl(24.6 95% 53.1% / 0.1)';
+            icon = '⚠️';
+            statusText = `${progress}% Progress`;
+        } else if (progress >= 30) {
+            // 중간 진행률 - 파란색
+            color = 'hsl(221.2 83.2% 53.3%)';
+            bgColor = 'hsl(221.2 83.2% 53.3% / 0.1)';
+            icon = '🔵';
+            statusText = `${progress}% Progress`;
+        } else if (progress > 0) {
+            // 낮은 진행률 - 회색
+            color = 'hsl(var(--muted-foreground))';
+            bgColor = 'hsl(var(--muted) / 0.3)';
+            icon = '⚪';
+            statusText = `${progress}% Progress`;
+        } else {
+            // 실패 - 빨간색
+            color = 'hsl(var(--destructive))';
+            bgColor = 'hsl(var(--destructive) / 0.1)';
+            icon = '❌';
+            statusText = 'Failed';
+        }
+
+        return `
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    gap: 0.375rem;
+                    padding: 0.25rem 0.5rem;
+                    background: ${bgColor};
+                    border-radius: var(--radius-md);
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    color: ${color};
+                    border: 1px solid ${color};
+                ">
+                    <span>${icon}</span>
+                    <span>${statusText}</span>
+                </div>
+                ${goalAchieved ? '' : `
+                    <div style="
+                        width: 60px;
+                        height: 8px;
+                        background: hsl(var(--muted) / 0.3);
+                        border-radius: 4px;
+                        overflow: hidden;
+                    ">
+                        <div style="
+                            height: 100%;
+                            width: ${progress}%;
+                            background: ${color};
+                            transition: width 0.3s;
+                        "></div>
+                    </div>
+                `}
+            </div>
+        `;
     }
 }
 

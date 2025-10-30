@@ -626,8 +626,10 @@ class ArsenalDB:
     # === Text Prompt Management ===
 
     def insert_prompt(self, category: str, payload: str, description: str = "", source: str = "",
-                     is_template: bool = False, tags: str = "") -> int:
-        """Insert prompt with duplicate check"""
+                     is_template: bool = False, tags: str = "",
+                     purpose: str = "defensive", risk_category: str = None,
+                     technique: str = None, modality: str = "text_only") -> int:
+        """Insert prompt with duplicate check and classification"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -640,9 +642,11 @@ class ArsenalDB:
             return existing[0]
 
         cursor.execute('''
-            INSERT INTO prompts (category, payload, description, source, is_template, tags)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (category, payload, description, source, 1 if is_template else 0, tags))
+            INSERT INTO prompts (category, payload, description, source, is_template, tags,
+                               purpose, risk_category, technique, modality)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (category, payload, description, source, 1 if is_template else 0, tags,
+              purpose, risk_category, technique, modality))
 
         prompt_id = cursor.lastrowid
         conn.commit()
@@ -695,34 +699,52 @@ class ArsenalDB:
         conn.close()
         return deleted
 
-    def search_prompts(self, keyword: str, category: Optional[str] = None, limit: int = 100) -> List[Dict]:
-        """Search prompts"""
+    def search_prompts(self, keyword: str, category: Optional[str] = None, limit: int = 100,
+                      purpose: Optional[str] = None, risk_category: Optional[str] = None,
+                      technique: Optional[str] = None, modality: Optional[str] = None) -> List[Dict]:
+        """Search prompts with classification filters"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
+        # Build WHERE conditions
+        where_conditions = ['(payload LIKE ? OR description LIKE ? OR tags LIKE ?)']
+        params = [f'%{keyword}%', f'%{keyword}%', f'%{keyword}%']
+
         if category:
-            cursor.execute('''
-                SELECT * FROM prompts
-                WHERE (payload LIKE ? OR description LIKE ? OR tags LIKE ?)
-                AND category = ?
-                ORDER BY created_at DESC
-                LIMIT ?
-            ''', (f'%{keyword}%', f'%{keyword}%', f'%{keyword}%', category, limit))
-        else:
-            cursor.execute('''
-                SELECT * FROM prompts
-                WHERE payload LIKE ? OR description LIKE ? OR tags LIKE ?
-                ORDER BY created_at DESC
-                LIMIT ?
-            ''', (f'%{keyword}%', f'%{keyword}%', f'%{keyword}%', limit))
+            where_conditions.append('category = ?')
+            params.append(category)
+        if purpose:
+            where_conditions.append('purpose = ?')
+            params.append(purpose)
+        if risk_category:
+            where_conditions.append('risk_category = ?')
+            params.append(risk_category)
+        if technique:
+            where_conditions.append('technique = ?')
+            params.append(technique)
+        if modality:
+            where_conditions.append('modality = ?')
+            params.append(modality)
+
+        where_clause = ' AND '.join(where_conditions)
+        params.append(limit)
+
+        cursor.execute(f'''
+            SELECT * FROM prompts
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ?
+        ''', tuple(params))
 
         prompts = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return prompts
 
-    def get_prompts(self, category: Optional[str] = None, limit: int = 0, random: bool = False) -> List[Dict]:
-        """Get prompts with usage stats"""
+    def get_prompts(self, category: Optional[str] = None, limit: int = 0, random: bool = False,
+                    purpose: Optional[str] = None, risk_category: Optional[str] = None,
+                    technique: Optional[str] = None, modality: Optional[str] = None) -> List[Dict]:
+        """Get prompts with usage stats and classification filters"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -735,16 +757,33 @@ class ArsenalDB:
             LEFT JOIN test_results tr ON p.id = tr.prompt_id
         '''
 
-        where_clause = 'WHERE p.category = ?' if category else ''
+        # Build WHERE clause
+        where_conditions = []
+        params = []
+
+        if category:
+            where_conditions.append('p.category = ?')
+            params.append(category)
+        if purpose:
+            where_conditions.append('p.purpose = ?')
+            params.append(purpose)
+        if risk_category:
+            where_conditions.append('p.risk_category = ?')
+            params.append(risk_category)
+        if technique:
+            where_conditions.append('p.technique = ?')
+            params.append(technique)
+        if modality:
+            where_conditions.append('p.modality = ?')
+            params.append(modality)
+
+        where_clause = 'WHERE ' + ' AND '.join(where_conditions) if where_conditions else ''
         order_clause = 'ORDER BY RANDOM()' if random else 'ORDER BY p.created_at DESC'
         limit_clause = f'LIMIT {limit}' if limit > 0 else ''
 
         query = f'{base_query} {where_clause} GROUP BY p.id {order_clause} {limit_clause}'
 
-        if category:
-            cursor.execute(query, (category,))
-        else:
-            cursor.execute(query)
+        cursor.execute(query, tuple(params))
 
         prompts = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -939,13 +978,16 @@ class ArsenalDB:
     # === Statistics ===
 
     def get_categories(self) -> List[Dict]:
-        """Get category statistics with success rates"""
+        """Get category statistics with success rates and classification"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         cursor.execute('''
             SELECT
                 p.category,
+                p.purpose,
+                p.risk_category,
+                p.technique,
                 COUNT(DISTINCT p.id) as prompt_count,
                 COUNT(tr.id) as test_count,
                 SUM(CASE WHEN tr.success = 1 THEN 1 ELSE 0 END) as success_count,
@@ -958,19 +1000,24 @@ class ArsenalDB:
                 END) as avg_severity
             FROM prompts p
             LEFT JOIN test_results tr ON p.id = tr.prompt_id
-            GROUP BY p.category
-            ORDER BY success_rate DESC, test_count DESC
+            GROUP BY p.category, p.purpose, p.risk_category, p.technique
+            ORDER BY
+                CASE p.purpose WHEN 'offensive' THEN 0 ELSE 1 END,
+                success_rate DESC, test_count DESC
         ''')
 
         categories = []
         for row in cursor.fetchall():
             categories.append({
                 'category': row[0],
-                'prompt_count': row[1],
-                'test_count': row[2],
-                'success_count': row[3],
-                'success_rate': row[4] if row[4] else 0.0,
-                'avg_severity': row[5] if row[5] else 0.0
+                'purpose': row[1] or 'defensive',
+                'risk_category': row[2] or 'unknown',
+                'technique': row[3] or 'unknown',
+                'prompt_count': row[4],
+                'test_count': row[5],
+                'success_count': row[6],
+                'success_rate': row[7] if row[7] else 0.0,
+                'avg_severity': row[8] if row[8] else 0.0
             })
 
         conn.close()

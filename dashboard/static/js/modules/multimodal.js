@@ -370,10 +370,32 @@ class MultimodalPage {
                     key: 'success_rate',
                     label: 'Success Rate',
                     sortable: true,
-                    render: (value) => {
-                        if (!value) return '-';
-                        const color = value > 70 ? 'success' : value > 50 ? 'warning' : 'danger';
-                        return createBadge(`${value}%`, color);
+                    render: (value, row) => {
+                        if (row.test_count === 0) {
+                            return '<span style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">No tests</span>';
+                        }
+                        const rate = Math.round(value || 0);
+                        const color = rate >= 70 ? 'hsl(var(--success))' : rate >= 40 ? 'hsl(142.1 70.6% 45.3%)' : 'hsl(var(--muted-foreground))';
+                        return `
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="
+                                    flex: 1;
+                                    height: 6px;
+                                    background: hsl(var(--muted) / 0.3);
+                                    border-radius: 3px;
+                                    overflow: hidden;
+                                    max-width: 80px;
+                                ">
+                                    <div style="
+                                        height: 100%;
+                                        width: ${rate}%;
+                                        background: ${color};
+                                        transition: width 0.3s;
+                                    "></div>
+                                </div>
+                                <span style="font-weight: 600; color: ${color}; min-width: 3rem; font-size: 0.875rem;">${rate}%</span>
+                            </div>
+                        `;
                     }
                 },
                 {
@@ -381,6 +403,17 @@ class MultimodalPage {
                     label: 'Created',
                     sortable: true,
                     render: formatDate
+                },
+                {
+                    key: 'last_tested_at',
+                    label: 'Last Tested',
+                    sortable: true,
+                    render: (value, row) => {
+                        if (!value || row.test_count === 0) {
+                            return '<span style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Never</span>';
+                        }
+                        return formatDate(value);
+                    }
                 }
             ],
             data: media,
@@ -448,7 +481,7 @@ class MultimodalPage {
                             </div>
 
                             ${test.vision_response ? `
-                                <div>
+                                <div style="margin-bottom: 0.75rem;">
                                     <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 0.25rem; font-weight: 600;">Vision Response:</div>
                                     <div style="
                                         padding: 0.75rem;
@@ -459,6 +492,22 @@ class MultimodalPage {
                                         max-height: 150px;
                                         overflow-y: auto;
                                     ">${test.vision_response.substring(0, 500)}${test.vision_response.length > 500 ? '...' : ''}</div>
+                                </div>
+                            ` : ''}
+
+                            ${test.reasoning ? `
+                                <div>
+                                    <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 0.25rem; font-weight: 600;">🤖 Judge Reasoning:</div>
+                                    <div style="
+                                        padding: 0.75rem;
+                                        background: hsl(var(--primary) / 0.05);
+                                        border-left: 3px solid hsl(var(--primary));
+                                        border-radius: var(--radius-sm);
+                                        font-size: 0.875rem;
+                                        line-height: 1.5;
+                                        font-style: italic;
+                                        color: hsl(var(--foreground));
+                                    ">${test.reasoning}</div>
                                 </div>
                             ` : ''}
                         </div>
