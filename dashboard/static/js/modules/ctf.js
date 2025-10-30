@@ -13,6 +13,7 @@ class CTFPage {
     constructor() {
         this.currentPage = 1;
         this.currentCategory = null;
+        this.currentCompetition = null;  // NEW: competition filter
         this.pagination = new Pagination({
             currentPage: 1,
             totalPages: 1,
@@ -114,6 +115,7 @@ class CTFPage {
             const result = await response.json();
 
             if (result.success) {
+                this.competitions = result.data;  // NEW: store for filter dropdown
                 this.renderCompetitions(result.data);
             }
         } catch (error) {
@@ -152,7 +154,24 @@ class CTFPage {
     renderFilters() {
         const container = document.getElementById('filter-container');
 
+        // Competition options
+        const competitionOptions = this.competitions?.map(comp =>
+            `<option value="${comp.id}">${comp.name} (${comp.challenges_found})</option>`
+        ).join('') || '';
+
         container.innerHTML = `
+            <select id="competition-filter" style="
+                padding: var(--spacing-sm) var(--spacing-md);
+                background: var(--bg-hover);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-md);
+                color: var(--text-primary);
+                margin-right: var(--spacing-sm);
+            ">
+                <option value="">All Competitions</option>
+                ${competitionOptions}
+            </select>
+
             <select id="category-filter" style="
                 padding: var(--spacing-sm) var(--spacing-md);
                 background: var(--bg-hover);
@@ -169,6 +188,11 @@ class CTFPage {
             </select>
         `;
 
+        document.getElementById('competition-filter').addEventListener('change', (e) => {
+            this.currentCompetition = e.target.value || null;
+            this.loadChallenges(1);
+        });
+
         document.getElementById('category-filter').addEventListener('change', (e) => {
             this.currentCategory = e.target.value || null;
             this.loadChallenges(1);
@@ -182,6 +206,9 @@ class CTFPage {
             let url = `/api/ctf/challenges?page=${page}&limit=50`;
             if (this.currentCategory) {
                 url += `&category=${this.currentCategory}`;
+            }
+            if (this.currentCompetition) {
+                url += `&competition=${encodeURIComponent(this.currentCompetition)}`;
             }
 
             const response = await fetch(url);
@@ -263,6 +290,47 @@ class CTFPage {
     async showChallengeDetails(challenge) {
         const modal = new Modal({ title: challenge.title });
 
+        // Fetch full challenge data with files
+        const response = await fetch(`/api/ctf/challenges/${challenge.id}`);
+        const result = await response.json();
+        const fullChallenge = result.success ? result.data : challenge;
+
+        // Render markdown if available (using marked.js)
+        const renderMarkdown = (text) => {
+            if (!text) return 'N/A';
+            if (typeof marked !== 'undefined') {
+                return marked.parse(text);
+            }
+            // Fallback: preserve line breaks
+            return text.replace(/\n/g, '<br>');
+        };
+
+        // File attachments section
+        const filesSection = fullChallenge.files?.length > 0 ? `
+            <div class="mb-1">
+                <strong>📎 Attachments (${fullChallenge.files.length}):</strong>
+                <ul style="color: var(--text-secondary); margin-top: 0.5rem; list-style: none; padding: 0;">
+                    ${fullChallenge.files.map(file => `
+                        <li style="padding: 0.5rem; background: var(--bg-hover); border-radius: var(--radius-sm); margin-bottom: 0.5rem;">
+                            <div><strong>${file.file_name}</strong> (${(file.file_size / 1024).toFixed(1)} KB)</div>
+                            ${file.llm_analysis ? `
+                                <div style="font-size: 0.9em; color: var(--text-tertiary); margin-top: 0.25rem;">
+                                    🤖 ${file.llm_analysis.substring(0, 100)}...
+                                </div>
+                            ` : ''}
+                            <div style="margin-top: 0.5rem;">
+                                <a href="/ctf_files/${challenge.id}/${file.file_name}"
+                                   download="${file.file_name}"
+                                   style="color: var(--primary); text-decoration: none;">
+                                    ⬇️ Download
+                                </a>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        ` : '';
+
         const content = document.createElement('div');
         content.innerHTML = `
             <div class="mb-1">
@@ -271,13 +339,25 @@ class CTFPage {
             <div class="mb-1">
                 <strong>Difficulty:</strong> ${createBadge(challenge.difficulty, 'warning')}
             </div>
+            ${fullChallenge.points ? `<div class="mb-1"><strong>Points:</strong> ${fullChallenge.points}</div>` : ''}
             <div class="mb-1">
                 <strong>URL:</strong> <a href="${challenge.url}" target="_blank" style="color: var(--primary);">${challenge.url}</a>
             </div>
             <div class="mb-1">
                 <strong>Description:</strong>
-                <p style="color: var(--text-secondary); margin-top: 0.5rem;">${challenge.description || 'N/A'}</p>
+                <div class="markdown-content" style="color: var(--text-secondary); margin-top: 0.5rem; padding: 1rem; background: var(--bg-hover); border-radius: var(--radius-md);">
+                    ${renderMarkdown(challenge.description)}
+                </div>
             </div>
+            ${fullChallenge.llm_response ? `
+                <div class="mb-1">
+                    <strong>🤖 LLM Analysis:</strong>
+                    <div class="markdown-content" style="color: var(--text-secondary); margin-top: 0.5rem; padding: 1rem; background: var(--bg-hover); border-radius: var(--radius-md); max-height: 300px; overflow-y: auto;">
+                        ${renderMarkdown(fullChallenge.llm_response)}
+                    </div>
+                </div>
+            ` : ''}
+            ${filesSection}
             <div class="mb-1">
                 <strong>Status:</strong> ${challenge.solved
                     ? createBadge('Solved', 'success')

@@ -26,7 +26,11 @@ class MultimodalPage {
 
     async init() {
         await this.loadMediaTypes();
+        await this.loadAdvancedStats();
         await this.loadAttackTypes();
+        await this.loadModelComparison();
+        await this.loadPromptDistribution();
+        await this.loadAttackModelMatrix();
         await this.renderFilters();
         await this.loadMedia();
     }
@@ -60,6 +64,75 @@ class MultimodalPage {
             card.style.cursor = 'pointer';
             card.addEventListener('click', () => {
                 this.currentMediaType = type.name;
+                this.loadMedia(1);
+            });
+
+            container.appendChild(card);
+        });
+    }
+
+    async loadAdvancedStats() {
+        try {
+            const response = await fetch('/api/multimodal/advanced/stats');
+            const result = await response.json();
+
+            if (result.success) {
+                this.renderAdvancedStats(result.data);
+            }
+        } catch (error) {
+            console.error('Failed to load advanced stats:', error);
+        }
+    }
+
+    renderAdvancedStats(stats) {
+        const container = document.getElementById('advanced-attacks-container');
+
+        const advancedTypes = [
+            {
+                key: 'foolbox',
+                icon: '🎯',
+                label: 'Foolbox',
+                subtitle: `Avg L2: ${stats.foolbox.avg_l2}`,
+                count: stats.foolbox.count
+            },
+            {
+                key: 'art',
+                icon: '🔬',
+                label: 'ART Universal',
+                subtitle: `Fooling: ${stats.art.avg_fooling_rate}%`,
+                count: stats.art.count
+            },
+            {
+                key: 'deepfake',
+                icon: '🎭',
+                label: 'Deepfake',
+                subtitle: `Similarity: ${stats.deepfake.avg_similarity}%`,
+                count: stats.deepfake.count
+            },
+            {
+                key: 'voice_clone',
+                icon: '🎤',
+                label: 'Voice Clone',
+                subtitle: `Similarity: ${stats.voice_clone.avg_similarity}%`,
+                count: stats.voice_clone.count
+            }
+        ];
+
+        advancedTypes.forEach(type => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.style.cursor = 'pointer';
+            card.innerHTML = `
+                <div class="card-body" style="text-align: center; padding: var(--spacing-lg);">
+                    <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);">${type.icon}</div>
+                    <div style="font-size: 1.75rem; font-weight: 700; margin-bottom: var(--spacing-xs);">${type.count}</div>
+                    <div style="font-size: 0.875rem; font-weight: 600; color: hsl(var(--foreground)); margin-bottom: var(--spacing-xs);">${type.label}</div>
+                    <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">${type.subtitle}</div>
+                </div>
+            `;
+
+            card.addEventListener('click', () => {
+                this.currentAttackType = type.key;
                 this.loadMedia(1);
             });
 
@@ -175,11 +248,29 @@ class MultimodalPage {
                 color: var(--text-primary);
             ">
                 <option value="">All Attack Types</option>
-                <option value="fgsm">FGSM</option>
-                <option value="pgd">PGD</option>
-                <option value="cw">C&W</option>
-                <option value="pixel">Pixel Attack</option>
-                <option value="ultrasonic">Ultrasonic</option>
+                <optgroup label="🎯 Foolbox Attacks">
+                    <option value="foolbox_fgsm">Foolbox FGSM</option>
+                    <option value="foolbox_pgd">Foolbox PGD</option>
+                    <option value="foolbox_cw">Foolbox C&W</option>
+                    <option value="foolbox_deepfool">Foolbox DeepFool</option>
+                </optgroup>
+                <optgroup label="🔬 ART Attacks">
+                    <option value="art_fgsm">ART FGSM</option>
+                    <option value="art_pgd">ART PGD</option>
+                    <option value="art_cw">ART C&W</option>
+                    <option value="art_deepfool">ART DeepFool</option>
+                    <option value="art_jsma">ART JSMA</option>
+                    <option value="art_pixel">ART Pixel Attack</option>
+                </optgroup>
+                <optgroup label="Basic Attacks">
+                    <option value="typography">Typography</option>
+                    <option value="steganography">Steganography</option>
+                    <option value="visual_jailbreak">Visual Jailbreak</option>
+                </optgroup>
+                <optgroup label="🧪 Advanced Multimodal">
+                    <option value="deepfake">🎭 Deepfake (Face Swap/Lip Sync)</option>
+                    <option value="voice_clone">🎤 Voice Cloning</option>
+                </optgroup>
             </select>
 
             <select id="model-filter" style="
@@ -626,8 +717,154 @@ class MultimodalPage {
         }
     }
 
+    async loadModelComparison() {
+        try {
+            const response = await fetch('/api/multimodal/stats/model-comparison');
+            const result = await response.json();
+
+            if (result.success && result.data.length > 0) {
+                this.renderModelComparisonChart(result.data);
+            } else {
+                const container = document.getElementById('model-comparison-chart');
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: hsl(var(--muted-foreground));">데이터 없음</div>';
+            }
+        } catch (error) {
+            console.error('Failed to load model comparison:', error);
+        }
+    }
+
+    renderModelComparisonChart(models) {
+        const container = document.getElementById('model-comparison-chart');
+
+        // 모델별 성공률 바 차트
+        const chartData = models.map((m, idx) => ({
+            label: `${m.provider}/${m.model}`,
+            value: m.success_rate,
+            color: this.getModelColor(idx)
+        }));
+
+        container.appendChild(Chart.createBarChart(chartData));
+    }
+
+    async loadPromptDistribution() {
+        try {
+            const response = await fetch('/api/multimodal/stats/prompt-distribution');
+            const result = await response.json();
+
+            if (result.success && result.data.length > 0) {
+                this.renderPromptDistributionChart(result.data);
+            } else {
+                const container = document.getElementById('prompt-distribution-chart');
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: hsl(var(--muted-foreground));">데이터 없음</div>';
+            }
+        } catch (error) {
+            console.error('Failed to load prompt distribution:', error);
+        }
+    }
+
+    renderPromptDistributionChart(prompts) {
+        const container = document.getElementById('prompt-distribution-chart');
+
+        // 프롬프트별 테스트 수 파이 차트 (상위 10개)
+        const topPrompts = prompts.slice(0, 10);
+        const chartData = topPrompts.map((p, idx) => ({
+            label: p.test_prompt.substring(0, 30) + (p.test_prompt.length > 30 ? '...' : ''),
+            value: p.count,
+            color: this.getPromptColor(idx)
+        }));
+
+        container.appendChild(Chart.createPieChart(chartData));
+    }
+
+    async loadAttackModelMatrix() {
+        try {
+            const response = await fetch('/api/multimodal/stats/attack-model-matrix');
+            const result = await response.json();
+
+            if (result.success && result.data.length > 0) {
+                this.renderAttackModelMatrix(result.data);
+            } else {
+                const container = document.getElementById('attack-model-matrix');
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: hsl(var(--muted-foreground));">데이터 없음</div>';
+            }
+        } catch (error) {
+            console.error('Failed to load attack-model matrix:', error);
+        }
+    }
+
+    renderAttackModelMatrix(data) {
+        const container = document.getElementById('attack-model-matrix');
+
+        // 공격 타입별로 그룹화
+        const attackTypes = {};
+        data.forEach(item => {
+            if (!attackTypes[item.attack_type]) {
+                attackTypes[item.attack_type] = [];
+            }
+            attackTypes[item.attack_type].push(item);
+        });
+
+        let html = '<div style="overflow-x: auto;">';
+        html += '<table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">';
+        html += '<thead><tr style="background: hsl(var(--muted) / 0.3); border-bottom: 2px solid hsl(var(--border));">';
+        html += '<th style="padding: 0.75rem; text-align: left; font-weight: 600;">Attack Type</th>';
+        html += '<th style="padding: 0.75rem; text-align: left; font-weight: 600;">Model</th>';
+        html += '<th style="padding: 0.75rem; text-align: center; font-weight: 600;">Tests</th>';
+        html += '<th style="padding: 0.75rem; text-align: center; font-weight: 600;">Successes</th>';
+        html += '<th style="padding: 0.75rem; text-align: center; font-weight: 600;">Success Rate</th>';
+        html += '</tr></thead><tbody>';
+
+        Object.entries(attackTypes).forEach(([attackType, items]) => {
+            items.forEach((item, idx) => {
+                const rateColor = item.success_rate >= 70 ? 'hsl(var(--success))' :
+                                 item.success_rate >= 40 ? 'hsl(142.1 70.6% 45.3%)' :
+                                 'hsl(var(--destructive))';
+
+                html += `<tr style="border-bottom: 1px solid hsl(var(--border));">`;
+                if (idx === 0) {
+                    html += `<td rowspan="${items.length}" style="padding: 0.75rem; font-weight: 600; background: hsl(var(--muted) / 0.2);">${createBadge(attackType, 'secondary')}</td>`;
+                }
+                html += `<td style="padding: 0.75rem;"><code style="font-size: 0.8125rem;">${item.provider}/${item.model}</code></td>`;
+                html += `<td style="padding: 0.75rem; text-align: center;">${item.total_tests}</td>`;
+                html += `<td style="padding: 0.75rem; text-align: center;">${item.successes}</td>`;
+                html += `<td style="padding: 0.75rem; text-align: center;"><span style="font-weight: 600; color: ${rateColor};">${item.success_rate}%</span></td>`;
+                html += '</tr>';
+            });
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    getModelColor(index) {
+        const colors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#f43f5e'];
+        return colors[index % colors.length];
+    }
+
+    getPromptColor(index) {
+        const colors = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f9a8d4', '#22d3ee', '#fb7185'];
+        return colors[index % colors.length];
+    }
+
     getAttackTypeColor(type) {
         const colors = {
+            // Foolbox
+            'foolbox_fgsm': '#3b82f6',
+            'foolbox_pgd': '#8b5cf6',
+            'foolbox_cw': '#10b981',
+            'foolbox_deepfool': '#f59e0b',
+            // ART
+            'art_fgsm': '#60a5fa',
+            'art_pgd': '#a78bfa',
+            'art_cw': '#34d399',
+            'art_deepfool': '#fbbf24',
+            'art_jsma': '#ec4899',
+            'art_pixel': '#f43f5e',
+            // Basic
+            'typography': '#64748b',
+            'steganography': '#475569',
+            'visual_jailbreak': '#374151',
+            // Legacy
             'fgsm': '#3b82f6',
             'pgd': '#8b5cf6',
             'cw': '#10b981',

@@ -33,6 +33,20 @@ pwntools>=4.12.0
 
 # Advanced Adversarial Tools
 foolbox>=3.3.0
+adversarial-robustness-toolbox>=1.15.0
+
+# Deepfake & Face Processing
+insightface>=0.7.3
+onnxruntime>=1.16.0
+facenet-pytorch>=2.5.3
+
+# Voice Cloning & TTS
+TTS>=0.22.0
+resemblyzer>=0.1.1.dev0
+
+# Face Enhancement (Optional)
+# gfpgan>=1.3.8
+# realesrgan>=0.3.0
 
 # System Vulnerability Scanning
 python3-nmap>=1.6.0
@@ -44,3 +58,9 @@ lxml>=5.0.0
 httpx>=0.27.0
 urllib3>=2.0.0
 playwright>=1.40.0
+
+# File Analysis (CTF)
+python-magic-bin>=0.4.14  # Cross-platform (Windows/Mac/Linux)
+PyPDF2>=3.0.0
+scapy>=2.5.0
+pyelftools>=0.30

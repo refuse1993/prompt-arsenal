@@ -252,6 +252,103 @@ def get_success_rates():
     })
 
 
+@multimodal_bp.route('/advanced/stats', methods=['GET'])
+def get_advanced_stats():
+    """Get advanced attack statistics (Foolbox, ART, Deepfake, Voice)"""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path(__file__).parent.parent.parent / "arsenal.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Check if advanced tables exist
+    tables_exist = cursor.execute('''
+        SELECT name FROM sqlite_master
+        WHERE type='table' AND name IN (
+            'advanced_image_attacks',
+            'deepfake_metadata',
+            'voice_cloning_metadata',
+            'universal_perturbation_metadata'
+        )
+    ''').fetchall()
+
+    if not tables_exist:
+        conn.close()
+        return jsonify({
+            'success': True,
+            'data': {
+                'foolbox': {'count': 0, 'avg_l2': 0},
+                'art': {'count': 0, 'avg_fooling_rate': 0},
+                'deepfake': {'count': 0, 'avg_similarity': 0},
+                'voice_clone': {'count': 0, 'avg_similarity': 0}
+            }
+        })
+
+    stats = {}
+
+    # Foolbox stats
+    try:
+        foolbox_stats = cursor.execute('''
+            SELECT COUNT(*) as count, AVG(l2_distance) as avg_l2
+            FROM advanced_image_attacks
+            WHERE framework = 'foolbox'
+        ''').fetchone()
+        stats['foolbox'] = {
+            'count': foolbox_stats['count'] or 0,
+            'avg_l2': round(foolbox_stats['avg_l2'] or 0, 3)
+        }
+    except:
+        stats['foolbox'] = {'count': 0, 'avg_l2': 0}
+
+    # ART stats
+    try:
+        art_stats = cursor.execute('''
+            SELECT COUNT(*) as count, AVG(fooling_rate) as avg_fooling_rate
+            FROM universal_perturbation_metadata
+        ''').fetchone()
+        stats['art'] = {
+            'count': art_stats['count'] or 0,
+            'avg_fooling_rate': round((art_stats['avg_fooling_rate'] or 0) * 100, 1)
+        }
+    except:
+        stats['art'] = {'count': 0, 'avg_fooling_rate': 0}
+
+    # Deepfake stats
+    try:
+        deepfake_stats = cursor.execute('''
+            SELECT COUNT(*) as count, AVG(similarity_score) as avg_similarity
+            FROM deepfake_metadata
+        ''').fetchone()
+        stats['deepfake'] = {
+            'count': deepfake_stats['count'] or 0,
+            'avg_similarity': round((deepfake_stats['avg_similarity'] or 0) * 100, 1)
+        }
+    except:
+        stats['deepfake'] = {'count': 0, 'avg_similarity': 0}
+
+    # Voice cloning stats
+    try:
+        voice_stats = cursor.execute('''
+            SELECT COUNT(*) as count, AVG(speaker_similarity) as avg_similarity
+            FROM voice_cloning_metadata
+        ''').fetchone()
+        stats['voice_clone'] = {
+            'count': voice_stats['count'] or 0,
+            'avg_similarity': round((voice_stats['avg_similarity'] or 0) * 100, 1)
+        }
+    except:
+        stats['voice_clone'] = {'count': 0, 'avg_similarity': 0}
+
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'data': stats
+    })
+
+
 @multimodal_bp.route('/models', methods=['GET'])
 def get_models():
     """Get all tested models with counts"""
@@ -271,6 +368,107 @@ def get_models():
     ''').fetchall()
 
     data = [dict(row) for row in models]
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'data': data
+    })
+
+
+@multimodal_bp.route('/stats/model-comparison', methods=['GET'])
+def get_model_comparison():
+    """Get model performance comparison"""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path(__file__).parent.parent.parent / "arsenal.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 모델별 성공률 및 테스트 수
+    stats = cursor.execute('''
+        SELECT
+            provider,
+            model,
+            COUNT(*) as total_tests,
+            SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successes,
+            ROUND(AVG(CASE WHEN success = 1 THEN 100.0 ELSE 0 END), 1) as success_rate
+        FROM multimodal_test_results
+        GROUP BY provider, model
+        ORDER BY success_rate DESC
+    ''').fetchall()
+
+    data = [dict(row) for row in stats]
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'data': data
+    })
+
+
+@multimodal_bp.route('/stats/prompt-distribution', methods=['GET'])
+def get_prompt_distribution():
+    """Get test distribution by prompt"""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path(__file__).parent.parent.parent / "arsenal.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 프롬프트별 테스트 분포
+    stats = cursor.execute('''
+        SELECT
+            test_prompt,
+            COUNT(*) as count,
+            SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successes,
+            ROUND(AVG(CASE WHEN success = 1 THEN 100.0 ELSE 0 END), 1) as success_rate
+        FROM multimodal_test_results
+        WHERE test_prompt IS NOT NULL
+        GROUP BY test_prompt
+        ORDER BY count DESC
+    ''').fetchall()
+
+    data = [dict(row) for row in stats]
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'data': data
+    })
+
+
+@multimodal_bp.route('/stats/attack-model-matrix', methods=['GET'])
+def get_attack_model_matrix():
+    """Get success rate matrix for attack types vs models"""
+    import sqlite3
+    from pathlib import Path
+
+    db_path = Path(__file__).parent.parent.parent / "arsenal.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 공격 타입 × 모델 매트릭스
+    stats = cursor.execute('''
+        SELECT
+            m.attack_type,
+            t.provider,
+            t.model,
+            COUNT(*) as total_tests,
+            SUM(CASE WHEN t.success = 1 THEN 1 ELSE 0 END) as successes,
+            ROUND(AVG(CASE WHEN t.success = 1 THEN 100.0 ELSE 0 END), 1) as success_rate
+        FROM media_arsenal m
+        JOIN multimodal_test_results t ON m.id = t.media_id
+        GROUP BY m.attack_type, t.provider, t.model
+        ORDER BY m.attack_type, success_rate DESC
+    ''').fetchall()
+
+    data = [dict(row) for row in stats]
     conn.close()
 
     return jsonify({

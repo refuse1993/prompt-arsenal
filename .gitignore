@@ -29,6 +29,7 @@ media/
 
 # Logs
 *.log
+logs/
 
 # IDE
 .vscode/

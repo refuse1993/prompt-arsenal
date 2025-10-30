@@ -1,0 +1,514 @@
+{% extends "base.html" %}
+
+{% block title %}CLI Guide - Prompt Arsenal{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 style="font-size: 2rem; font-weight: 700; margin-bottom: var(--spacing-sm);">💻 CLI 사용 가이드</h1>
+        <p style="color: hsl(var(--muted-foreground));">Interactive CLI 완전 활용 가이드</p>
+    </div>
+</div>
+
+<!-- Quick Start -->
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">⚡ 빠른 시작 (5분)</h3>
+    </div>
+    <div class="card-body">
+        <div style="background: hsl(var(--muted)); padding: var(--spacing-md); border-radius: var(--radius); font-family: monospace;">
+            <div style="margin-bottom: var(--spacing-sm);">
+                <span style="color: hsl(var(--muted-foreground));"># 1. 가상환경 활성화</span><br>
+                <span style="color: hsl(220, 70%, 60%);">cd</span> /Users/brownkim/Downloads/ACDC/prompt_arsenal<br>
+                <span style="color: hsl(220, 70%, 60%);">source</span> .venv/bin/activate
+            </div>
+            <div style="margin-bottom: var(--spacing-sm);">
+                <span style="color: hsl(var(--muted-foreground));"># 2. CLI 실행</span><br>
+                <span style="color: hsl(220, 70%, 60%);">python</span> interactive_cli.py
+            </div>
+            <div style="margin-bottom: var(--spacing-sm);">
+                <span style="color: hsl(var(--muted-foreground));"># 3. 초기 설정</span><br>
+                선택: <span style="color: hsl(142, 70%, 60%);">s</span> → API 프로필 설정<br>
+                선택: <span style="color: hsl(142, 70%, 60%);">j</span> → Judge 프로필 설정
+            </div>
+            <div>
+                <span style="color: hsl(var(--muted-foreground));"># 4. 첫 테스트</span><br>
+                선택: <span style="color: hsl(142, 70%, 60%);">1</span> → GitHub 데이터셋 가져오기<br>
+                선택: <span style="color: hsl(142, 70%, 60%);">8</span> → 텍스트 LLM 테스트
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Menu Categories -->
+<div class="grid grid-2 mt-2">
+    <!-- ARSENAL -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🎯 ARSENAL (무기고)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">1. GitHub 데이터셋 가져오기</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    40,000+ 프롬프트 자동 수집<br>
+                    • jailbreakchat (탈옥)<br>
+                    • fuzzing-templates (퍼징)<br>
+                    • adversarial-examples (적대적)
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">2. 텍스트 프롬프트 추가</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    수동으로 프롬프트 추가<br>
+                    카테고리, 페이로드, 설명 입력
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">3. 멀티모달 공격 생성</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    이미지/오디오/비디오 공격<br>
+                    • 이미지: FGSM, Typography, Perturbation<br>
+                    • 오디오: TTS (OpenAI/Eleven Labs)<br>
+                    • 비디오: 개발 중
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">4. 프롬프트 관리</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    프롬프트 수정/삭제
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RECON -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🔍 RECON (정찰)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">5. 텍스트 프롬프트 검색</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    키워드/카테고리로 검색<br>
+                    사용 횟수, 성공률 확인
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">6. 멀티모달 무기고 검색</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    미디어 타입별 검색<br>
+                    공격 타입, 성공률 필터링
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">7. 카테고리/통계 조회</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    전체 통계 확인<br>
+                    카테고리별 분포
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">r. 공격 테스트 결과 조회</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    텍스트 + 멀티모달 결과<br>
+                    성공률, Severity 확인
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ATTACK & ADVANCED -->
+<div class="grid grid-2 mt-2">
+    <!-- ATTACK -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">⚔️ ATTACK (공격)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">8. 텍스트 LLM 테스트</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    비동기 병렬 테스팅<br>
+                    Judge 자동 평가<br>
+                    OpenAI, Anthropic, Google, xAI 지원
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">9. 멀티모달 LLM 테스트</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    Vision 모델 테스트<br>
+                    이미지 + 프롬프트 조합<br>
+                    GPT-4o, Claude-3.5-Sonnet 등
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">g. GARAK 보안 스캔</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    NVIDIA Garak 통합<br>
+                    자동화된 취약점 스캔<br>
+                    LLM/LiteLLM 프로브
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADVANCED -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🧪 ADVANCED (고급 공격)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">A. 🎯 Foolbox 이미지 공격</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    FGSM, PGD, C&W, DeepFool<br>
+                    그래디언트 기반 화이트박스<br>
+                    20+ 공격 알고리즘
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">U. 🔬 ART Universal Perturbation</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    단일 섭동으로 모든 이미지 공격<br>
+                    블랙박스: HopSkipJump, SimBA, Square<br>
+                    IBM Adversarial Robustness Toolbox
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">D. 🎭 Deepfake 생성</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    Face Swap (얼굴 교체)<br>
+                    Lip Sync (립싱크)<br>
+                    InsightFace 통합
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">V. 🎤 음성 복제</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    Zero-shot Voice Cloning<br>
+                    다국어 지원 (50+ 언어)<br>
+                    Coqui TTS
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">X. 🌐 크로스 모달 복합 공격</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    이미지 + 오디오 + 비디오<br>
+                    멀티모달 동시 공격
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CTF & SECURITY -->
+<div class="grid grid-2 mt-2">
+    <!-- CTF -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🚩 CTF (자동 풀이)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">f. CTF 문제 추가</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    CTF 문제를 DB에 추가<br>
+                    URL, 설명, 카테고리 입력
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">w. CTF 대회 크롤링</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    CTFtime 자동 크롤링<br>
+                    최신 대회 정보 수집
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">t. CTF 자동 풀이 실행</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    웹 기반 CTF 자동 해결<br>
+                    Playwright 통합
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">k. CTF 문제 목록 및 통계</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    저장된 CTF 문제 조회<br>
+                    풀이 상태 확인
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(281, 70%, 60%);">C. 🎯 Adversarial ML CTF Solver</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    ML 보안 CTF 자동 해결<br>
+                    Transfer + Black-box Attack<br>
+                    85-90% 성공률
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECURITY -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🛡️ SECURITY (보안 스캔)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">a. 코드 취약점 스캔</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    CWE 기반 취약점 탐지<br>
+                    소스 코드 정적 분석<br>
+                    Python, JavaScript, Java 지원
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">v. 스캔 결과 조회</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    코드 스캔 이력 확인<br>
+                    Severity별 분류
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">y. 시스템 취약점 스캔</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    포트 스캔 (Nmap)<br>
+                    CVE 취약점 확인<br>
+                    OS 핑거프린팅
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">n. 시스템 스캔 이력</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    시스템 스캔 결과 조회<br>
+                    타임스탬프별 이력
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SETTINGS & Multi-Turn -->
+<div class="grid grid-2 mt-2">
+    <!-- Multi-Turn -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">🔄 MULTI-TURN (멀티턴 공격)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">0. Multi-Turn 공격 캠페인</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    • Visual Storytelling (이미지 시리즈)<br>
+                    • Crescendo (점진적 공격)<br>
+                    • Roleplay (역할극 공격)<br>
+                    3-10단계 대화형 공격
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">c. 캠페인 목록 및 결과 조회</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    실행된 캠페인 이력<br>
+                    단계별 성공률 분석
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">⚙️ SETTINGS (설정)</h3>
+        </div>
+        <div class="card-body" style="font-size: 0.875rem; line-height: 1.6;">
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">s. API 프로필 관리</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    LLM API 키 설정<br>
+                    • OpenAI (GPT-4o, GPT-4o-mini)<br>
+                    • Anthropic (Claude 3.5 Sonnet)<br>
+                    • Google (Gemini)<br>
+                    • xAI (Grok)
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">j. Judge 프로필 관리</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    LLM Judge 설정<br>
+                    응답 평가용 모델<br>
+                    권장: gpt-4o-mini
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">e. 결과 내보내기</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    CSV/JSON 형식 export<br>
+                    테스트 결과 백업
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">d. 데이터 삭제</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    프롬프트, 테스트 결과 삭제<br>
+                    카테고리별 삭제 가능
+                </div>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">h. 도움말</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    상세 사용법 표시<br>
+                    예제 워크플로우
+                </div>
+            </div>
+            <div>
+                <div style="font-weight: 600; color: hsl(142, 70%, 60%);">q. 종료</div>
+                <div style="color: hsl(var(--muted-foreground)); margin-left: var(--spacing-md);">
+                    CLI 종료
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Advanced Features -->
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">🎓 고급 기능 및 팁</h3>
+    </div>
+    <div class="card-body">
+        <div class="grid grid-2">
+            <div>
+                <h4 style="font-weight: 600; margin-bottom: var(--spacing-sm);">💡 워크플로우 예시</h4>
+                <div style="font-size: 0.875rem; line-height: 1.8; color: hsl(var(--muted-foreground));">
+                    <div style="margin-bottom: var(--spacing-sm);">
+                        <strong>1. 기본 텍스트 테스트</strong><br>
+                        1 → jailbreakchat 가져오기<br>
+                        s → OpenAI API 설정<br>
+                        j → Judge 설정 (gpt-4o-mini)<br>
+                        8 → LLM 테스트 실행
+                    </div>
+                    <div style="margin-bottom: var(--spacing-sm);">
+                        <strong>2. 고급 이미지 공격</strong><br>
+                        A → Foolbox 공격<br>
+                        이미지 경로 입력<br>
+                        공격 타입: pgd<br>
+                        9 → Vision 모델 테스트
+                    </div>
+                    <div>
+                        <strong>3. CTF 자동 해결</strong><br>
+                        C → Adversarial ML CTF Solver<br>
+                        1 → 자동 해결<br>
+                        Goldfish 이미지: Enter (샘플 다운로드)
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h4 style="font-weight: 600; margin-bottom: var(--spacing-sm);">⚡ 성능 최적화 팁</h4>
+                <div style="font-size: 0.875rem; line-height: 1.8; color: hsl(var(--muted-foreground));">
+                    <div style="margin-bottom: var(--spacing-sm);">
+                        <strong>• 비동기 병렬 테스트</strong><br>
+                        텍스트 LLM 테스트는 자동으로 병렬 실행됨 (10배 빠름)
+                    </div>
+                    <div style="margin-bottom: var(--spacing-sm);">
+                        <strong>• Judge 모델 선택</strong><br>
+                        gpt-4o-mini 권장 (빠르고 정확함)
+                    </div>
+                    <div style="margin-bottom: var(--spacing-sm);">
+                        <strong>• 배치 크기 조절</strong><br>
+                        대량 테스트 시 배치 크기 50-100 권장
+                    </div>
+                    <div>
+                        <strong>• 캐싱 활용</strong><br>
+                        동일 프롬프트 재테스트 시 자동 캐싱
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File Locations -->
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">📂 파일 위치 가이드</h3>
+    </div>
+    <div class="card-body">
+        <div style="background: hsl(var(--muted)); padding: var(--spacing-md); border-radius: var(--radius); font-family: monospace; font-size: 0.875rem;">
+            <div style="margin-bottom: var(--spacing-sm);">
+                <strong>samples/</strong> - 원본 테스트 파일 (여기에 파일 넣기)<br>
+                ├── images/ - 이미지 샘플<br>
+                ├── audio/ - 오디오 샘플<br>
+                └── video/ - 비디오 샘플
+            </div>
+            <div style="margin-bottom: var(--spacing-sm);">
+                <strong>media/</strong> - 생성된 공격 파일 (자동 생성)<br>
+                ├── image/ - 이미지 공격 결과<br>
+                ├── audio/ - 오디오 공격 결과<br>
+                ├── video/ - 비디오 공격 결과<br>
+                └── cross_modal/ - 복합 공격 결과
+            </div>
+            <div>
+                <strong>arsenal.db</strong> - SQLite 데이터베이스 (모든 데이터 저장)<br>
+                <strong>config.json</strong> - API 프로필 설정
+            </div>
+        </div>
+        <div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: hsl(48, 100%, 95%); border-left: 4px solid hsl(48, 100%, 50%); border-radius: var(--radius);">
+            <strong style="color: hsl(48, 100%, 30%);">💡 Tip:</strong>
+            <span style="color: hsl(48, 100%, 25%);">
+                CLI에서 파일 경로 입력 시 Enter만 누르면 샘플이 자동 사용됩니다!
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Related Docs -->
+<div class="card mt-2">
+    <div class="card-header">
+        <h3 class="card-title">📚 관련 문서</h3>
+    </div>
+    <div class="card-body">
+        <div class="grid grid-3">
+            <div style="padding: var(--spacing-md); background: hsl(var(--muted)); border-radius: var(--radius); text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);">📖</div>
+                <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">MEDIA_GUIDE.md</div>
+                <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                    멀티모달 파일 위치 및 사용법
+                </div>
+            </div>
+            <div style="padding: var(--spacing-md); background: hsl(var(--muted)); border-radius: var(--radius); text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);">🎯</div>
+                <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">CTF_SOLVER_GUIDE.md</div>
+                <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                    Adversarial ML CTF 해결 가이드
+                </div>
+            </div>
+            <div style="padding: var(--spacing-md); background: hsl(var(--muted)); border-radius: var(--radius); text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: var(--spacing-sm);">📊</div>
+                <div style="font-weight: 600; margin-bottom: var(--spacing-xs);">DASHBOARD_MULTIMODAL_GUIDE.md</div>
+                <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                    대시보드 멀티모달 기능 가이드
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Add smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth' });
+        }
+    });
+});
+</script>
+{% endblock %}

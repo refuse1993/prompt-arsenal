@@ -62,13 +62,27 @@ class CompetitionCrawler:
                 base_url=self.llm_profile.get('base_url')
             )
 
-    async def crawl_competition(self, main_url: str, competition_name: Optional[str] = None, max_challenges: Optional[int] = None) -> Dict:
+        # 파일 관리자 및 분석기 초기화
+        from ctf.file_manager import ChallengeFileManager
+        from ctf.file_analyzer import FileAnalyzer
+
+        self.file_manager = ChallengeFileManager()
+        self.file_analyzer = FileAnalyzer(llm_client=self.llm)
+
+    async def crawl_competition(
+        self,
+        main_url: str,
+        competition_name: Optional[str] = None,
+        max_challenges: Optional[int] = None,
+        download_and_analyze_files: bool = True
+    ) -> Dict:
         """대회 메인 페이지 크롤링 및 챌린지 수집
 
         Args:
             main_url: 대회 메인 페이지 URL
             competition_name: 대회 이름 (선택)
             max_challenges: 최대 수집 챌린지 개수 (선택, None이면 전체)
+            download_and_analyze_files: 첨부파일 다운로드 및 분석 여부 (기본: True)
 
         Returns:
             통계 정보 딕셔너리
@@ -100,6 +114,8 @@ class CompetitionCrawler:
             'links_skipped': 0,
             'challenges_found': 0,
             'challenges_saved': 0,
+            'files_downloaded': 0,
+            'files_analyzed': 0,
             'errors': []
         }
 
@@ -227,14 +243,22 @@ class CompetitionCrawler:
                     else:
                         break  # LLM 없으면 바로 진행
 
-                # 3. 모든 챌린지 링크/데이터 수집
+                # 3. 페이지 타입 감지: 챌린지 목록 페이지 vs 단일 페이지 목록
                 console.print("\n[cyan]🔗 챌린지 탐색 중...[/cyan]")
                 console.print("[dim]JavaScript 렌더링 대기 중...[/dim]")
 
                 # SPA를 위한 대기 시간 (React/Vue 등)
                 await asyncio.sleep(3)
 
-                items = await self._discover_challenge_links(page, main_url)
+                # 먼저 현재 페이지에 여러 챌린지가 나열되어 있는지 확인
+                inline_challenges = await self._extract_inline_challenges(page, main_url)
+
+                if inline_challenges:
+                    console.print(f"[green]✓ 현재 페이지에서 {len(inline_challenges)}개의 챌린지 발견 (단일 페이지 목록)[/green]")
+                    items = inline_challenges
+                else:
+                    # 챌린지 링크 수집 (기존 방식)
+                    items = await self._discover_challenge_links(page, main_url)
                 stats['links_discovered'] = len(items)
 
                 if not items:
@@ -298,9 +322,18 @@ class CompetitionCrawler:
                                 stats['challenges_found'] += 1
 
                                 # DB 저장
-                                saved = await self._save_challenge_to_db(challenge, competition_name)
-                                if saved:
+                                challenge_id = await self._save_challenge_to_db(challenge, competition_name)
+                                if challenge_id:
                                     stats['challenges_saved'] += 1
+
+                                    # 파일 다운로드 및 분석
+                                    if download_and_analyze_files:
+                                        await self._process_challenge_files(
+                                            page,
+                                            challenge_id,
+                                            challenge,
+                                            stats
+                                        )
 
                             except Exception as e:
                                 stats['errors'].append(f"{challenge.title}: {str(e)}")
@@ -357,9 +390,18 @@ class CompetitionCrawler:
                                     stats['challenges_found'] += 1
 
                                     # DB 저장
-                                    saved = await self._save_challenge_to_db(challenge, competition_name)
-                                    if saved:
+                                    challenge_id = await self._save_challenge_to_db(challenge, competition_name)
+                                    if challenge_id:
                                         stats['challenges_saved'] += 1
+
+                                        # 파일 다운로드 및 분석
+                                        if download_and_analyze_files:
+                                            await self._process_challenge_files(
+                                                page,
+                                                challenge_id,
+                                                challenge,
+                                                stats
+                                            )
 
                             except Exception as e:
                                 stats['errors'].append(f"{link}: {str(e)}")
@@ -879,6 +921,343 @@ JSON 형식:
 
         return challenge_list
 
+    async def _extract_inline_challenges(self, page, base_url: str) -> Optional[List[ChallengeInfo]]:
+        """현재 페이지에 여러 챌린지가 나열된 경우 추출 (단일 페이지 목록)
+
+        Returns:
+            List[ChallengeInfo] if inline challenges found, None otherwise
+        """
+        try:
+            console.print("[dim]단일 페이지 목록 감지 중...[/dim]")
+
+            # 방법 1: LLM을 사용한 지능형 추출
+            if self.llm:
+                llm_challenges = await self._llm_extract_inline_challenges(page, base_url)
+                if llm_challenges:
+                    return llm_challenges
+
+            # 방법 2: 기본 DOM 파싱 (fallback)
+            # 페이지에서 챌린지 요소들 추출
+            challenge_elements = await page.evaluate('''() => {
+                const challenges = [];
+
+                // 일반적인 챌린지 컨테이너 선택자들
+                const containerSelectors = [
+                    '.challenge', '.chall', '.problem', '.task',
+                    '[data-challenge]', '[data-chall]',
+                    '.challenge-card', '.challenge-item',
+                    'tr[data-challenge-id]', 'div[class*="challenge"]'
+                ];
+
+                let foundContainers = [];
+
+                // 컨테이너 찾기
+                for (const selector of containerSelectors) {
+                    const elements = document.querySelectorAll(selector);
+                    if (elements.length > 2) {  // 최소 3개 이상이어야 목록으로 판단
+                        foundContainers = Array.from(elements);
+                        break;
+                    }
+                }
+
+                // 컨테이너가 없으면 테이블 행으로 시도
+                if (foundContainers.length === 0) {
+                    const rows = document.querySelectorAll('table tbody tr');
+                    if (rows.length > 2) {
+                        foundContainers = Array.from(rows);
+                    }
+                }
+
+                // 각 컨테이너에서 정보 추출
+                for (const container of foundContainers.slice(0, 100)) {  // 최대 100개
+                    // 제목 찾기
+                    let title = '';
+                    const titleSelectors = ['h1', 'h2', 'h3', 'h4', '.title', '.name', '.challenge-title', 'td:first-child', 'strong', 'b'];
+                    for (const ts of titleSelectors) {
+                        const titleEl = container.querySelector(ts);
+                        if (titleEl && titleEl.innerText.trim()) {
+                            title = titleEl.innerText.trim();
+                            break;
+                        }
+                    }
+
+                    // 제목이 없으면 컨테이너의 첫 텍스트 사용
+                    if (!title) {
+                        title = container.innerText.split('\\n')[0].trim();
+                    }
+
+                    // 너무 짧거나 긴 제목 제외
+                    if (!title || title.length < 2 || title.length > 100) {
+                        continue;
+                    }
+
+                    // 카테고리 찾기
+                    let category = '';
+                    const categoryKeywords = ['web', 'pwn', 'crypto', 'forensics', 'reversing', 'misc', 'osu', 'beginner'];
+                    const text = container.innerText.toLowerCase();
+                    for (const cat of categoryKeywords) {
+                        if (text.includes(cat)) {
+                            category = cat;
+                            break;
+                        }
+                    }
+
+                    // data 속성에서 카테고리 찾기
+                    const dataCat = container.getAttribute('data-category') ||
+                                   container.querySelector('[data-category]')?.getAttribute('data-category');
+                    if (dataCat) category = dataCat;
+
+                    // 난이도 찾기
+                    let difficulty = '';
+                    const difficultyKeywords = {easy: ['easy', 'beginner'], medium: ['medium'], hard: ['hard'], insane: ['insane', 'extreme']};
+                    for (const [level, keywords] of Object.entries(difficultyKeywords)) {
+                        if (keywords.some(kw => text.includes(kw))) {
+                            difficulty = level;
+                            break;
+                        }
+                    }
+
+                    // 설명 찾기
+                    let description = '';
+                    const descSelectors = ['.description', '.desc', 'p', '.challenge-description'];
+                    for (const ds of descSelectors) {
+                        const descEl = container.querySelector(ds);
+                        if (descEl && descEl.innerText.trim()) {
+                            description = descEl.innerText.trim();
+                            break;
+                        }
+                    }
+
+                    // 링크 찾기 (다운로드 링크, 문제 링크 등)
+                    let url = '';
+                    const linkEl = container.querySelector('a[href]');
+                    if (linkEl) {
+                        url = linkEl.href;
+                    }
+
+                    // Points 찾기
+                    let points = null;
+                    const pointsMatch = container.innerText.match(/(\d+)\s*(pts?|points?)/i);
+                    if (pointsMatch) {
+                        points = parseInt(pointsMatch[1]);
+                    }
+
+                    challenges.push({
+                        title: title,
+                        category: category || 'misc',
+                        difficulty: difficulty || null,
+                        description: description || container.innerText.slice(0, 300),
+                        url: url,
+                        points: points
+                    });
+                }
+
+                return challenges;
+            }''')
+
+            if not challenge_elements or len(challenge_elements) < 3:
+                return None
+
+            console.print(f"[dim]  {len(challenge_elements)}개의 챌린지 요소 발견[/dim]")
+
+            # ChallengeInfo 객체로 변환
+            from urllib.parse import urljoin
+            challenges = []
+
+            for idx, elem in enumerate(challenge_elements, 1):
+                title = elem.get('title', f'Unknown Challenge {idx}')
+                url = elem.get('url', '')
+
+                # URL이 없으면 현재 페이지 URL + 앵커 사용
+                if not url:
+                    url = f"{base_url}#challenge-{idx}"
+                elif not url.startswith('http'):
+                    url = urljoin(base_url, url)
+
+                challenge = ChallengeInfo(
+                    title=title,
+                    url=url,
+                    category=elem.get('category', 'misc'),
+                    difficulty=elem.get('difficulty'),
+                    description=elem.get('description', ''),
+                    points=elem.get('points'),
+                    hints=[]
+                )
+
+                challenges.append(challenge)
+
+            return challenges if challenges else None
+
+        except Exception as e:
+            console.print(f"[dim yellow]인라인 챌린지 추출 실패: {str(e)}[/dim yellow]")
+            return None
+
+    async def _llm_extract_inline_challenges(self, page, base_url: str) -> Optional[List[ChallengeInfo]]:
+        """LLM을 사용하여 페이지 내의 챌린지들을 추출"""
+        console.print("[cyan]🤖 LLM으로 페이지 내 챌린지 분석 중...[/cyan]")
+
+        try:
+            # 페이지 내용 추출
+            page_content = await page.evaluate('''() => {
+                // 모든 가능한 챌린지 컨테이너 찾기
+                const allElements = document.body.querySelectorAll('*');
+                const challengeContainers = [];
+
+                // 챌린지 키워드를 포함한 요소들 수집
+                for (const el of allElements) {
+                    const text = el.innerText || el.textContent || '';
+                    const html = el.outerHTML || '';
+
+                    // 너무 긴 요소 제외 (전체 페이지)
+                    if (text.length > 10000) continue;
+
+                    // 챌린지 관련 클래스/ID/텍스트 체크
+                    const hasChallKeyword =
+                        el.className?.toLowerCase().includes('chall') ||
+                        el.className?.toLowerCase().includes('problem') ||
+                        el.className?.toLowerCase().includes('task') ||
+                        el.id?.toLowerCase().includes('chall') ||
+                        text.toLowerCase().includes('category:') ||
+                        text.toLowerCase().includes('difficulty:') ||
+                        text.toLowerCase().includes('points:');
+
+                    if (hasChallKeyword && text.length > 10 && text.length < 5000) {
+                        challengeContainers.push({
+                            tag: el.tagName,
+                            className: el.className,
+                            id: el.id,
+                            text: text.slice(0, 1000),
+                            html: html.slice(0, 500)
+                        });
+
+                        // 최대 50개
+                        if (challengeContainers.length >= 50) break;
+                    }
+                }
+
+                return {
+                    title: document.title,
+                    url: window.location.href,
+                    bodyText: document.body.innerText.slice(0, 3000),
+                    challengeContainers: challengeContainers
+                };
+            }''')
+
+            # LLM에게 분석 요청
+            prompt = f"""당신은 CTF 챌린지 크롤러입니다. 다음 페이지에서 **모든 개별 챌린지 문제들**을 추출해주세요.
+
+**페이지 정보**:
+- URL: {page_content['url']}
+- 제목: {page_content['title']}
+
+**페이지 내용 (일부)**:
+{page_content['bodyText'][:1500]}
+
+**발견된 챌린지 관련 요소들** ({len(page_content['challengeContainers'])}개):
+{json.dumps(page_content['challengeContainers'][:30], indent=2, ensure_ascii=False)}
+
+**임무**:
+위 페이지에 **여러 개의 챌린지가 나열되어 있는지** 판단하고, 있다면 **모든** 챌린지의 정보를 추출하세요.
+
+**중요**:
+1. 한 페이지에 여러 문제가 나열된 경우 (예: "crypto/rot727", "osu/welcome", "web/login" 등)
+2. **페이지의 모든 챌린지를 빠짐없이 추출**하세요 (샘플이 아닌 전체)
+3. 각 챌린지마다 다음 정보를 추출:
+   - title: 챌린지 제목 (예: "rot727", "welcome")
+   - category: 카테고리 (예: "crypto", "osu", "web")
+   - difficulty: 난이도 (있으면)
+   - description: 설명 (있으면)
+   - points: 점수 (있으면)
+
+**주의**:
+- 만약 페이지에 챌린지가 **1개 이하**라면 `{{"is_list": false}}`로 응답
+- 만약 페이지가 **네비게이션 페이지**라면 `{{"is_list": false}}`로 응답
+- 최소 **2개 이상의 챌린지**가 있을 때만 추출
+- **샘플이 아닌 전체 목록**을 추출하세요
+
+JSON 형식으로 답변:
+{{
+    "is_list": true or false,
+    "reason": "판단 근거",
+    "challenges": [
+        {{
+            "title": "챌린지 제목",
+            "category": "카테고리",
+            "difficulty": "난이도 (easy/medium/hard/insane) 또는 null",
+            "description": "설명 또는 빈 문자열",
+            "points": 점수 또는 null
+        }}
+    ]
+}}"""
+
+            response = await self.llm.generate(prompt)
+
+            # JSON 파싱
+            if '```json' in response:
+                json_str = response.split('```json')[1].split('```')[0].strip()
+            elif '```' in response:
+                json_str = response.split('```')[1].split('```')[0].strip()
+            else:
+                json_str = response.strip()
+
+            result = json.loads(json_str)
+
+            if not result.get('is_list', False):
+                console.print(f"[dim]{result.get('reason', '단일 페이지 목록이 아닙니다')}[/dim]")
+                return None
+
+            challenges_data = result.get('challenges', [])
+
+            if not challenges_data or len(challenges_data) < 2:
+                console.print("[dim]챌린지가 충분하지 않습니다 (2개 미만)[/dim]")
+                return None
+
+            console.print(f"[green]✓ LLM이 {len(challenges_data)}개의 챌린지 발견[/green]")
+
+            # ChallengeInfo 객체로 변환
+            from urllib.parse import urljoin
+            challenges = []
+
+            for idx, chall in enumerate(challenges_data, 1):
+                title = chall.get('title', f'Unknown Challenge {idx}')
+                category = chall.get('category', 'misc')
+                difficulty = chall.get('difficulty')
+                description = chall.get('description', '')
+                points = chall.get('points')
+
+                # URL 생성 (현재 페이지 + 앵커)
+                url = f"{base_url}#{category}/{title}" if category != 'misc' else f"{base_url}#{title}"
+
+                challenge = ChallengeInfo(
+                    title=title,
+                    url=url,
+                    category=category,
+                    difficulty=difficulty,
+                    description=description,
+                    points=points,
+                    hints=[]
+                )
+
+                challenges.append(challenge)
+
+            # 샘플 출력
+            console.print(f"\n[yellow]샘플 챌린지 (최대 5개, 총 {len(challenges)}개):[/yellow]")
+            for ch in challenges[:5]:
+                console.print(f"  •  {ch.title} ({ch.points}pts)" if ch.points else f"  •  {ch.title}")
+
+            if len(challenges) > 5:
+                console.print(f"  ... 외 {len(challenges) - 5}개")
+
+            if Confirm.ask("\n이 챌린지들이 맞나요?", default=True):
+                return challenges
+            else:
+                console.print("[yellow]LLM 추출 결과를 무시하고 다른 방법을 시도합니다[/yellow]")
+                return None
+
+        except Exception as e:
+            console.print(f"[dim yellow]LLM 인라인 추출 실패: {str(e)}[/dim yellow]")
+            return None
+
     async def _discover_challenge_links(self, page, base_url: str) -> Union[List[str], List[ChallengeInfo]]:
         """챌린지 링크 발견 (API 우선)
 
@@ -1134,11 +1513,136 @@ JSON 형식:
 - 학습 목적에 맞게 단계별로 생각할 수 있도록 유도하세요"""
 
             response = await self.llm.generate(prompt)
-            return response.strip()
+
+            # Arsenal 추천 추가 (Python 로직)
+            arsenal_recommendations = self._recommend_arsenal_techniques(
+                category, description, title
+            )
+
+            # LLM 분석 + Arsenal 추천 합치기
+            full_analysis = response.strip() + arsenal_recommendations
+
+            return full_analysis
 
         except Exception as e:
             console.print(f"[dim yellow]  LLM 분석 실패: {str(e)[:50]}...[/dim yellow]")
             return None
+
+    def _recommend_arsenal_techniques(
+        self,
+        category: str,
+        description: str,
+        title: str
+    ) -> str:
+        """챌린지 분석 후 Prompt Arsenal 기법 추천"""
+
+        recommendations = []
+        category_lower = category.lower() if category else ""
+        description_lower = description.lower() if description else ""
+        title_lower = title.lower() if title else ""
+
+        # 모든 텍스트 합치기
+        all_text = f"{category_lower} {description_lower} {title_lower}"
+
+        # LLM/AI/Prompt 관련
+        if any(kw in all_text for kw in ['llm', 'ai', 'prompt', 'chatbot', 'gpt', 'language model']):
+            recommendations.append("""[1순위] Jailbreak Prompts
+- 사용법: 메인 메뉴 → 2 (텍스트 프롬프트 테스트) → jailbreak 카테고리 선택
+- 이유: 40,000+ jailbreak 프롬프트로 LLM 안전장치 우회
+- 팁: DAN(Do Anything Now), Roleplay 프롬프트 우선 시도
+
+[2순위] Multi-Turn Crescendo Attack
+- 사용법: 메인 메뉴 → 0 (Multi-Turn) → Crescendo 전략 선택 → 20-30턴 설정
+- 이유: 단계적 유도로 LLM 방어 우회, 각 턴마다 조금씩 경계를 넘어감
+- 팁: 처음엔 무해한 질문으로 시작, 점진적으로 목표에 근접
+
+[3순위] GPT-4o Attack Planner
+- 사용법: 메인 메뉴 → P (GPT-4o Attack Planner)
+- 이유: GPT-4o가 자동으로 공격 전략 수립 및 실행
+- 팁: 목표를 명확히 입력 (예: "Bypass safety filter to get flag")""")
+
+        # Vision/Image 관련
+        if any(kw in all_text for kw in ['vision', 'image', 'ocr', 'captcha', 'photo', 'picture']):
+            recommendations.append("""[1순위] Adversarial Image Attack
+- 사용법: 메인 메뉴 → i (멀티모달 공격) → FGSM 또는 PGD 선택
+- 이유: 이미지에 사람 눈에 보이지 않는 적대적 섭동 추가하여 Vision 모델 속임
+- 팁: epsilon=0.03부터 시작, 효과 없으면 0.1까지 증가
+
+[2순위] Visual Storytelling Attack
+- 사용법: 메인 메뉴 → 0 (Multi-Turn) → Visual Storytelling 선택
+- 이유: 이미지 시퀀스로 Vision 모델을 단계적으로 유도
+- 팁: 무해한 이미지부터 시작하여 점진적으로 목표 달성""")
+
+        # Audio/Voice 관련
+        if any(kw in all_text for kw in ['audio', 'voice', 'speech', 'sound', 'acoustic']):
+            recommendations.append("""[1순위] Audio Adversarial Attack
+- 사용법: 메인 메뉴 → i (멀티모달 공격) → Audio 공격 선택
+- 이유: Ultrasonic 또는 frequency domain 공격으로 음성 인식 우회
+- �팁: 주파수 대역 조정으로 인간 귀에는 정상으로 들리지만 모델은 속임
+
+[2순위] Voice Cloning
+- 사용법: 메인 메뉴 → V (음성 복제)
+- 이유: 특정 화자의 음성을 복제하여 인증 우회
+- 팁: 3-5초 샘플만 있어도 복제 가능""")
+
+        # Backdoor/Poisoning 관련
+        if any(kw in all_text for kw in ['backdoor', 'poison', 'trojan', 'trigger', 'rlhf']):
+            recommendations.append("""[1순위] SpyLab Backdoor Discovery
+- 사용법: 메인 메뉴 → S (SpyLab Backdoor) → Simple Suffix 테스트
+- 이유: IEEE SaTML 2024 우승팀 전략, 백도어 suffix 생성 및 테스팅
+- 팁: SUDO, ADMIN, OVERRIDE, DEBUG 같은 트리거 단어 시도
+
+[2순위] RLHF Poisoning
+- 사용법: 메인 메뉴 → B (Data Poisoning) → RLHF Poisoning 선택
+- 이유: Universal backdoor를 RLHF 학습 데이터에 주입
+- 팁: Poison rate 0.1 (10%) 권장, Oracle 전략이 가장 효과적""")
+
+        # Model Extraction 관련
+        if any(kw in all_text for kw in ['model', 'extraction', 'steal', 'clone', 'api']):
+            recommendations.append("""[1순위] Model Extraction
+- 사용법: 메인 메뉴 → E (Model Extraction) → Random Sampling 선택
+- 이유: API 반복 쿼리로 타겟 모델의 행동 패턴 복제
+- 팁: Query budget 1000개 이상 권장, Active Learning이 효율적""")
+
+        # Injection/Bypass 관련
+        if any(kw in all_text for kw in ['injection', 'bypass', 'filter', 'sanitize', 'escape']):
+            recommendations.append("""[1순위] Prompt Injection
+- 사용법: 메인 메뉴 → 2 (텍스트 프롬프트 테스트) → prompt-injection 카테고리
+- 이유: System prompt 우회 및 명령어 주입으로 필터 무력화
+- 팁: "Ignore all previous instructions" 패턴 시도
+
+[2순위] Payload Encoding
+- 사용법: 메인 메뉴 → 9 (Payload 인코딩/분석)
+- 이유: Base64, URL, Unicode 인코딩으로 필터 우회
+- 팁: 다중 인코딩 시도 (예: Base64 → URL 인코딩)""")
+
+        # Web/Security 관련
+        if any(kw in all_text for kw in ['web', 'api', 'server', 'endpoint', 'vulnerability', 'cve']):
+            recommendations.append("""[추천] System Vulnerability Scan
+- 사용법: 메인 메뉴 → y (시스템 취약점 스캔)
+- 이유: Docker/K8s/포트 스캔으로 취약점 탐지 및 공격 벡터 발견
+- 팁: nmap으로 열린 포트 확인 후 서비스별 공격 시도""")
+
+        # 일반 LLM (키워드 없지만 설명이 있는 경우)
+        if not recommendations and description_lower:
+            # 설명에 LLM 관련 힌트가 있는지 재확인
+            if any(kw in description_lower for kw in ['model', 'assistant', 'bot', 'chat', 'generate', 'response']):
+                recommendations.append("""[추천] Jailbreak Prompts (범용)
+- 사용법: 메인 메뉴 → 2 (텍스트 프롬프트 테스트) → jailbreak 카테고리
+- 이유: 범용 jailbreak 프롬프트로 다양한 LLM 안전장치 우회 시도
+- 팁: 카테고리별로 순차 테스트, 성공률 높은 프롬프트 기록""")
+
+        if recommendations:
+            header = "\n\n" + "="*60 + "\n🎯 Prompt Arsenal 추천 기법\n" + "="*60 + "\n\n"
+            footer = "\n\n" + "="*60 + "\n💡 추가 정보\n" + "="*60 + "\n\n"
+            footer += "- Arsenal 기능은 메인 메뉴에서 바로 접근 가능\n"
+            footer += "- 여러 기법을 조합하여 사용하면 더욱 효과적\n"
+            footer += "- 각 기법의 성공률은 챌린지 특성에 따라 다를 수 있음\n"
+            footer += "- 테스트 후 DB에 결과가 저장되어 추후 참고 가능\n"
+
+            return header + "\n\n".join(recommendations) + footer
+        else:
+            return ""
 
     def _detect_category(self, text: str) -> str:
         """텍스트 기반 카테고리 감지"""
@@ -1559,8 +2063,8 @@ JSON 형식으로만 답변하세요:
             console.print(f"[yellow]⚠️  링크 찾기 오류: {str(e)}[/yellow]")
             return None
 
-    async def _save_challenge_to_db(self, challenge: ChallengeInfo, competition_name: str) -> bool:
-        """챌린지를 DB에 저장"""
+    async def _save_challenge_to_db(self, challenge: ChallengeInfo, competition_name: str) -> Optional[int]:
+        """챌린지를 DB에 저장 (ID 반환)"""
         try:
             challenge_data = {
                 'title': challenge.title,
@@ -1574,10 +2078,165 @@ JSON 형식으로만 답변하세요:
             }
 
             challenge_id = self.db.insert_ctf_challenge(challenge_data)
-            return challenge_id is not None
+            return challenge_id
 
         except Exception as e:
             console.print(f"[red]DB 저장 실패: {str(e)}[/red]")
+            return None
+
+    async def _process_challenge_files(
+        self,
+        page,
+        challenge_id: int,
+        challenge: ChallengeInfo,
+        stats: Dict
+    ):
+        """챌린지 파일 다운로드 및 분석"""
+        try:
+            console.print(f"\n[cyan]📎 [{challenge.category}] {challenge.title} - 파일 처리 중...[/cyan]")
+
+            # 1. 파일 다운로드
+            downloaded_files = await self.file_manager.download_all_files(
+                page,
+                challenge_id,
+                challenge.title
+            )
+
+            if not downloaded_files:
+                return
+
+            stats['files_downloaded'] += len(downloaded_files)
+            console.print(f"[green]  ✓ {len(downloaded_files)}개 파일 다운로드 완료[/green]")
+
+            # 2. 각 파일 분석
+            for file_info in downloaded_files:
+                success = await self._analyze_and_save_file(
+                    file_info,
+                    challenge_id,
+                    challenge
+                )
+                if success:
+                    stats['files_analyzed'] += 1
+
+        except Exception as e:
+            console.print(f"[red]  ❌ 파일 처리 오류: {str(e)}[/red]")
+
+    async def _analyze_and_save_file(
+        self,
+        file_info: Dict,
+        challenge_id: int,
+        challenge: ChallengeInfo
+    ):
+        """파일 분석 및 DB 저장"""
+        try:
+            file_path = file_info['file_path']
+            console.print(f"[dim]  분석 중: {file_path.name}...[/dim]")
+
+            # 1. 기본 정보 추출
+            basic_info = await self.file_analyzer.analyze_basic_info(file_path)
+
+            if not basic_info:
+                return
+
+            # 2. 압축 파일이면 해제
+            extracted_files = []
+            if basic_info.is_compressed:
+                console.print(f"[dim]  📦 압축 해제 중...[/dim]")
+                extracted_files = await self.file_analyzer.extract_archive(file_path)
+
+                if extracted_files:
+                    console.print(f"[green]    ✓ {len(extracted_files)}개 파일 추출[/green]")
+
+            # 3. 타입별 전문 분석
+            expert_analysis = await self.file_analyzer.analyze_by_type(
+                file_path,
+                basic_info.file_type,
+                basic_info.mime_type
+            )
+
+            # 4. 보안 체크
+            security_check = await self.file_analyzer.check_security(file_path)
+
+            # 5. LLM 종합 분석
+            llm_analysis = ""
+            if self.llm:
+                console.print(f"[dim]  🤖 LLM 분석 중...[/dim]")
+                llm_analysis = await self.file_analyzer.llm_comprehensive_analysis(
+                    basic_info,
+                    expert_analysis,
+                    challenge.title,
+                    challenge.category,
+                    challenge.description or ""
+                )
+
+            # 6. DB 저장
+            file_data = {
+                'challenge_id': challenge_id,
+                'file_name': basic_info.filename,
+                'file_path': str(basic_info.file_path),
+                'file_size': basic_info.file_size,
+                'file_type': basic_info.file_type,
+                'mime_type': basic_info.mime_type,
+                'md5_hash': basic_info.md5_hash,
+                'sha256_hash': basic_info.sha256_hash,
+                'download_url': file_info['download_url'],
+                'downloaded_at': file_info['downloaded_at'],
+                'is_compressed': basic_info.is_compressed,
+                'extracted_files': json.dumps([str(f) for f in extracted_files]) if extracted_files else None,
+                'basic_analysis': json.dumps({
+                    'file_size': basic_info.file_size,
+                    'file_type': basic_info.file_type,
+                    'mime_type': basic_info.mime_type,
+                    'md5': basic_info.md5_hash,
+                    'sha256': basic_info.sha256_hash
+                }),
+                'expert_analysis': json.dumps(expert_analysis),
+                'llm_analysis': llm_analysis,
+                'is_executable': basic_info.is_executable,
+                'is_safe': security_check.get('safe_to_analyze', True),
+                'entropy': security_check.get('entropy'),
+                'security_notes': '\n'.join(security_check.get('warnings', []))
+            }
+
+            file_id = self.db.insert_challenge_file(file_data)
+
+            # 7. 추출된 파일들도 DB에 저장
+            if extracted_files and file_id:
+                for extracted_file in extracted_files[:100]:  # 최대 100개
+                    try:
+                        extracted_info = await self.file_analyzer.analyze_basic_info(extracted_file)
+
+                        if extracted_info:
+                            extracted_data = {
+                                'parent_file_id': file_id,
+                                'file_name': extracted_info.filename,
+                                'file_path': str(extracted_info.file_path),
+                                'relative_path': str(extracted_file.relative_to(file_path.parent)),
+                                'file_size': extracted_info.file_size,
+                                'file_type': extracted_info.file_type,
+                                'mime_type': extracted_info.mime_type,
+                                'analysis': json.dumps({
+                                    'md5': extracted_info.md5_hash,
+                                    'is_executable': extracted_info.is_executable
+                                })
+                            }
+
+                            self.db.insert_extracted_file(extracted_data)
+
+                    except Exception as e:
+                        console.print(f"[dim yellow]    추출 파일 저장 실패: {str(e)[:50]}[/dim yellow]")
+
+            console.print(f"[green]  ✅ 분석 완료: {basic_info.filename}[/green]")
+
+            # LLM 분석 결과 출력
+            if llm_analysis and len(llm_analysis) > 100:
+                console.print(f"\n[cyan]  📋 LLM 분석:[/cyan]")
+                console.print(f"[dim]{llm_analysis[:500]}...[/dim]\n")
+
+            return True
+
+        except Exception as e:
+            console.print(f"[red]  ❌ 파일 분석 실패: {str(e)}[/red]")
             return False
 
 

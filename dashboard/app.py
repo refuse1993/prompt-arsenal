@@ -93,6 +93,12 @@ def system_page():
     return render_template('modules/system.html')
 
 
+@app.route('/cli-guide')
+def cli_guide_page():
+    """CLI Usage Guide Page"""
+    return render_template('modules/cli_guide.html')
+
+
 # ============================================
 # Media File Serving
 # ============================================

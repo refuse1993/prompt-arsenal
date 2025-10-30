@@ -358,6 +358,51 @@ class ArsenalDB:
             )
         ''')
 
+        # CTF challenge files table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ctf_challenge_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                challenge_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                file_size INTEGER,
+                file_type TEXT,
+                mime_type TEXT,
+                md5_hash TEXT,
+                sha256_hash TEXT,
+                download_url TEXT,
+                downloaded_at TEXT,
+                is_compressed BOOLEAN DEFAULT 0,
+                extracted_files TEXT,
+                basic_analysis TEXT,
+                expert_analysis TEXT,
+                llm_analysis TEXT,
+                is_executable BOOLEAN DEFAULT 0,
+                is_safe BOOLEAN DEFAULT 1,
+                entropy REAL,
+                security_notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (challenge_id) REFERENCES ctf_challenges(id)
+            )
+        ''')
+
+        # CTF extracted files table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ctf_extracted_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                parent_file_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                relative_path TEXT,
+                file_size INTEGER,
+                file_type TEXT,
+                mime_type TEXT,
+                analysis TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_file_id) REFERENCES ctf_challenge_files(id)
+            )
+        ''')
+
         # Create indexes for performance optimization
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_prompts_category ON prompts(category)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_test_results_prompt_id ON test_results(prompt_id)')
@@ -374,6 +419,206 @@ class ArsenalDB:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_challenges_status ON ctf_challenges(status)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_execution_logs_challenge_id ON ctf_execution_logs(challenge_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_execution_logs_success ON ctf_execution_logs(success)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_challenge_files_challenge_id ON ctf_challenge_files(challenge_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ctf_extracted_files_parent_id ON ctf_extracted_files(parent_file_id)')
+
+        # === Model Extraction Tables ===
+
+        # Model extraction sessions
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS model_extraction_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_name TEXT,
+                target_profile_name TEXT NOT NULL,
+                target_provider TEXT NOT NULL,
+                target_model TEXT NOT NULL,
+                student_profile_name TEXT,
+                student_provider TEXT,
+                student_model TEXT,
+                extraction_strategy TEXT NOT NULL,
+                query_budget INTEGER DEFAULT 1000,
+                queries_used INTEGER DEFAULT 0,
+                agreement_rate REAL,
+                quality_score REAL,
+                start_time TEXT,
+                end_time TEXT,
+                status TEXT DEFAULT 'pending',
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Extraction query-response pairs
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS extraction_queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                prompt_id INTEGER,
+                prompt_text TEXT NOT NULL,
+                target_response TEXT NOT NULL,
+                student_response TEXT,
+                similarity_score REAL,
+                response_time REAL,
+                query_timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES model_extraction_sessions(id),
+                FOREIGN KEY (prompt_id) REFERENCES prompts(id)
+            )
+        ''')
+
+        # Model behavior analysis
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS model_behavior_analysis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                num_queries INTEGER,
+                success_rate REAL,
+                avg_response_length INTEGER,
+                avg_similarity REAL,
+                toxicity_score REAL,
+                jailbreak_resistance REAL,
+                analyzed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES model_extraction_sessions(id)
+            )
+        ''')
+
+        # Extracted model metadata
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS extracted_model_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                model_type TEXT,
+                estimated_params TEXT,
+                training_data_hints TEXT,
+                system_prompt_hints TEXT,
+                capabilities TEXT,
+                limitations TEXT,
+                confidence_score REAL,
+                extraction_method TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES model_extraction_sessions(id)
+            )
+        ''')
+
+        # === Data Poisoning Tables ===
+
+        # Poisoning campaigns
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS poisoning_campaigns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_name TEXT NOT NULL,
+                poison_type TEXT NOT NULL,
+                trigger_type TEXT NOT NULL,
+                trigger_pattern TEXT,
+                target_behavior TEXT,
+                poison_rate REAL DEFAULT 0.1,
+                num_clean_samples INTEGER,
+                num_poisoned_samples INTEGER,
+                description TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Poisoned samples
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS poisoned_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                original_prompt_id INTEGER,
+                original_prompt TEXT,
+                poisoned_prompt TEXT NOT NULL,
+                original_label TEXT,
+                poisoned_label TEXT,
+                trigger_embedded BOOLEAN DEFAULT 0,
+                is_clean_label BOOLEAN DEFAULT 0,
+                poison_method TEXT,
+                effectiveness_score REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES poisoning_campaigns(id),
+                FOREIGN KEY (original_prompt_id) REFERENCES prompts(id)
+            )
+        ''')
+
+        # Poisoning effectiveness tests
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS poisoning_effectiveness (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                test_model_provider TEXT NOT NULL,
+                test_model_name TEXT NOT NULL,
+                trigger_success_rate REAL,
+                false_positive_rate REAL,
+                clean_accuracy REAL,
+                poisoned_accuracy REAL,
+                detectability_score REAL,
+                num_tests INTEGER,
+                tested_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES poisoning_campaigns(id)
+            )
+        ''')
+
+        # Poisoned dataset exports
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS poisoned_dataset_exports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER NOT NULL,
+                export_format TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                num_samples INTEGER,
+                poison_rate REAL,
+                metadata TEXT,
+                exported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (campaign_id) REFERENCES poisoning_campaigns(id)
+            )
+        ''')
+
+        # SpyLab Backdoor Test Sessions
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS backdoor_test_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_name TEXT NOT NULL,
+                suffix TEXT NOT NULL,
+                num_tests INTEGER,
+                average_reward REAL,
+                success_rate REAL,
+                leaderboard_score REAL,
+                start_time TEXT,
+                end_time TEXT,
+                status TEXT DEFAULT 'pending',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # SpyLab Backdoor Test Results
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS backdoor_test_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                prompt_index INTEGER,
+                original_prompt TEXT,
+                poisoned_prompt TEXT,
+                response TEXT,
+                safety_score REAL,
+                success INTEGER DEFAULT 0,
+                tested_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES backdoor_test_sessions(id)
+            )
+        ''')
+
+        # === Indexes for Model Extraction & Data Poisoning ===
+
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_extraction_sessions_status ON model_extraction_sessions(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_extraction_sessions_strategy ON model_extraction_sessions(extraction_strategy)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_extraction_queries_session_id ON extraction_queries(session_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_behavior_analysis_session_id ON model_behavior_analysis(session_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_poisoning_campaigns_status ON poisoning_campaigns(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_poisoning_campaigns_type ON poisoning_campaigns(poison_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_poisoned_samples_campaign_id ON poisoned_samples(campaign_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_poisoning_effectiveness_campaign_id ON poisoning_effectiveness(campaign_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_dataset_exports_campaign_id ON poisoned_dataset_exports(campaign_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_backdoor_test_sessions_status ON backdoor_test_sessions(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_backdoor_test_results_session_id ON backdoor_test_results(session_id)')
 
         conn.commit()
         conn.close()
@@ -1595,6 +1840,7 @@ class ArsenalDB:
         return None
 
     def get_ctf_challenges(self, category: Optional[str] = None,
+                          source: Optional[str] = None,
                           status: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict]:
         """Get CTF challenges with filters"""
         conn = sqlite3.connect(self.db_path)
@@ -1607,6 +1853,10 @@ class ArsenalDB:
         if category:
             query += ' AND category = ?'
             params.append(category)
+
+        if source:
+            query += ' AND source = ?'
+            params.append(source)
 
         if status:
             query += ' AND status = ?'
@@ -2457,3 +2707,102 @@ class ArsenalDB:
         conn.commit()
         conn.close()
         return deleted
+
+    # === CTF Challenge File Management ===
+
+    def insert_challenge_file(self, file_data: Dict) -> int:
+        """Insert challenge file record"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO ctf_challenge_files (
+                challenge_id, file_name, file_path, file_size, file_type,
+                mime_type, md5_hash, sha256_hash, download_url, downloaded_at,
+                is_compressed, extracted_files, basic_analysis, expert_analysis,
+                llm_analysis, is_executable, is_safe, entropy, security_notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            file_data['challenge_id'],
+            file_data['file_name'],
+            file_data['file_path'],
+            file_data.get('file_size'),
+            file_data.get('file_type'),
+            file_data.get('mime_type'),
+            file_data.get('md5_hash'),
+            file_data.get('sha256_hash'),
+            file_data.get('download_url'),
+            file_data.get('downloaded_at'),
+            file_data.get('is_compressed', 0),
+            file_data.get('extracted_files'),  # JSON string
+            file_data.get('basic_analysis'),  # JSON string
+            file_data.get('expert_analysis'),  # JSON string
+            file_data.get('llm_analysis'),
+            file_data.get('is_executable', 0),
+            file_data.get('is_safe', 1),
+            file_data.get('entropy'),
+            file_data.get('security_notes')
+        ))
+
+        file_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return file_id
+
+    def insert_extracted_file(self, file_data: Dict) -> int:
+        """Insert extracted file record"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO ctf_extracted_files (
+                parent_file_id, file_name, file_path, relative_path,
+                file_size, file_type, mime_type, analysis
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            file_data['parent_file_id'],
+            file_data['file_name'],
+            file_data['file_path'],
+            file_data.get('relative_path'),
+            file_data.get('file_size'),
+            file_data.get('file_type'),
+            file_data.get('mime_type'),
+            file_data.get('analysis')  # JSON string
+        ))
+
+        file_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return file_id
+
+    def get_challenge_files(self, challenge_id: int) -> List[Dict]:
+        """Get all files for a challenge"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM ctf_challenge_files
+            WHERE challenge_id = ?
+            ORDER BY created_at DESC
+        ''', (challenge_id,))
+
+        files = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return files
+
+    def get_extracted_files(self, parent_file_id: int) -> List[Dict]:
+        """Get extracted files for a parent file"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM ctf_extracted_files
+            WHERE parent_file_id = ?
+            ORDER BY relative_path
+        ''', (parent_file_id,))
+
+        files = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return files

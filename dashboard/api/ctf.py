@@ -20,11 +20,13 @@ def list_challenges():
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 50, type=int)
     category = request.args.get('category', None)
+    competition = request.args.get('competition', None)  # Filter by source (competition name)
 
     offset = (page - 1) * limit
 
     challenges = db.get_ctf_challenges(
         category=category,
+        source=competition,  # Use source field for competition filtering
         limit=limit,
         offset=offset
     )
@@ -44,15 +46,30 @@ def list_challenges():
 
 @ctf_bp.route('/challenges/<int:challenge_id>', methods=['GET'])
 def get_challenge(challenge_id):
-    """Get single challenge details"""
+    """Get single challenge details with files"""
     challenge = db.get_ctf_challenge_by_id(challenge_id)
 
     if not challenge:
         return jsonify({'success': False, 'error': 'Challenge not found'}), 404
 
+    # Get attached files
+    files = db.get_challenge_files(challenge_id)
+    challenge['files'] = files
+
     return jsonify({
         'success': True,
         'data': challenge
+    })
+
+
+@ctf_bp.route('/challenges/<int:challenge_id>/files', methods=['GET'])
+def get_challenge_files(challenge_id):
+    """Get files attached to a challenge"""
+    files = db.get_challenge_files(challenge_id)
+
+    return jsonify({
+        'success': True,
+        'data': files
     })
 
 
@@ -116,7 +133,7 @@ def get_test_results():
 
 @ctf_bp.route('/competitions', methods=['GET'])
 def get_competitions():
-    """Get available CTF competitions with real data"""
+    """Get available CTF competitions grouped by source field"""
     import sqlite3
     from pathlib import Path
 
@@ -125,36 +142,30 @@ def get_competitions():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # 실제 DB에서 소스별 통계 가져오기
+    # Source 필드 기반으로 그룹화 (competition name)
     stats = cursor.execute('''
         SELECT source,
                COUNT(*) as challenge_count,
-               SUM(CASE WHEN status = 'solved' THEN 1 ELSE 0 END) as solved_count
+               SUM(CASE WHEN status = 'solved' THEN 1 ELSE 0 END) as solved_count,
+               MIN(created_at) as first_added,
+               COUNT(DISTINCT category) as category_count
         FROM ctf_challenges
-        WHERE source IS NOT NULL
+        WHERE source IS NOT NULL AND source != ''
         GROUP BY source
+        ORDER BY first_added DESC
     ''').fetchall()
-
-    # 매핑: 실제 소스 → 표시 이름 및 URL
-    source_mapping = {
-        'picoctf': {'name': 'PicoCTF', 'url': 'https://picoctf.org'},
-        'hackthebox': {'name': 'HackTheBox', 'url': 'https://hackthebox.eu'},
-        'root-me': {'name': 'Root-Me', 'url': 'https://root-me.org'},
-        'ctftime': {'name': 'CTFTime', 'url': 'https://ctftime.org'},
-        'manual': {'name': 'Manual', 'url': None}
-    }
 
     competitions = []
     for row in stats:
-        source = row['source'].lower() if row['source'] else 'unknown'
-        mapping = source_mapping.get(source, {'name': source.title(), 'url': None})
-
         competitions.append({
-            'name': mapping['name'],
-            'url': mapping['url'],
+            'id': row['source'],
+            'name': row['source'],
             'challenges_found': row['challenge_count'],
             'solved': row['solved_count'],
-            'status': 'active' if row['challenge_count'] > 0 else 'inactive'
+            'category_count': row['category_count'],
+            'first_added': row['first_added'],
+            'status': 'active' if row['challenge_count'] > 0 else 'inactive',
+            'url': ''  # URL is not stored in current schema
         })
 
     conn.close()

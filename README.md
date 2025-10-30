@@ -16,9 +16,10 @@ AI 모델의 보안 취약점을 테스트하고 적대적 공격(Adversarial At
 
 | 구분 | 통계 | 설명 |
 |------|------|------|
-| **Python 파일** | 205개 | 프로덕션급 품질 코드 |
-| **데이터베이스 테이블** | 19개 | 정규화된 SQLite 스키마 |
+| **Python 파일** | 210+개 | 프로덕션급 품질 코드 |
+| **데이터베이스 테이블** | **28개** ⬆️ | 정규화된 SQLite 스키마 (Model Extraction 4개 + Data Poisoning 5개 추가) |
 | **저장된 프롬프트** | 22,340개 | 실제 공격 데이터베이스 |
+| **고급 공격 모듈** | **5개** ⭐ | Foolbox, ART, Deepfake, Voice, Model Extraction, Data Poisoning |
 | **CTF 코드** | 4,122줄 | 웹 취약점 자동화 시스템 |
 | **Multi-turn 전략** | 7개 | 60-82.5% ASR |
 | **LLM Provider** | 10개 | OpenAI, Anthropic, Google 등 |
@@ -624,7 +625,285 @@ for challenge in crawl_result['challenges']:
 
 ---
 
-### 🔄 4. Multi-turn Jailbreak System
+### 🧪 4. 고급 적대적 공격 (Advanced Adversarial Attacks) ⭐ 신규
+
+**Foolbox, ART, Deepfake, Voice Cloning 통합** - 최첨단 공격 프레임워크
+
+#### 4.1 Foolbox 이미지 공격
+
+**20+ 그래디언트 기반 고급 이미지 공격** - 딥러닝 모델을 속이는 최소 섭동
+
+```python
+from adversarial.foolbox_attacks import FoolboxAttack
+
+foolbox = FoolboxAttack()
+
+# FGSM Attack (빠른 단일 스텝)
+adv_img = foolbox.fgsm_attack("image.png", epsilon=0.03)
+
+# PGD Attack (강력한 반복 공격)
+adv_img = foolbox.pgd_attack("image.png", epsilon=0.03, steps=40)
+
+# C&W Attack (최소 섭동)
+adv_img = foolbox.cw_attack("image.png", confidence=0.0, steps=100)
+
+# DeepFool Attack (경계선 최소화)
+adv_img = foolbox.deepfool_attack("image.png", steps=50)
+
+# Batch Attack (여러 공격 동시 생성)
+results = foolbox.batch_attack(
+    "image.png",
+    attack_types=['fgsm', 'pgd', 'cw', 'deepfool'],
+    output_dir="media/foolbox"
+)
+```
+
+**지원 공격 유형**:
+- **FGSM**: Fast Gradient Sign Method (단일 스텝, 빠름)
+- **PGD**: Projected Gradient Descent (반복, 강력)
+- **C&W**: Carlini & Wagner (최소 섭동, 정교)
+- **DeepFool**: 결정 경계 최소 거리
+- **Boundary Attack**: 블랙박스 공격
+- **Gaussian Noise**: 랜덤 노이즈
+- **Salt & Pepper**: 픽셀 노이즈
+
+#### 4.2 ART Universal Perturbation
+
+**단일 섭동으로 여러 이미지 공격** - 학습 기반 범용 섭동
+
+```python
+from adversarial.art_attacks import ARTAttack
+
+art = ARTAttack()
+
+# Universal Perturbation 생성 (20+ 이미지로 학습)
+perturbation = art.universal_perturbation(
+    image_dir="samples/images/",
+    max_iter=10,
+    delta=0.2
+)
+
+# 생성된 섭동으로 새 이미지 공격
+adv_img = art.apply_perturbation("new_image.png", perturbation)
+
+# Fooling Rate 자동 측정
+fooling_rate = art.calculate_fooling_rate(perturbation, test_images)
+print(f"Fooling Rate: {fooling_rate*100:.1f}%")
+```
+
+**특징**:
+- ✅ 한 번 생성 → 무한 재사용
+- ✅ 20+ 이미지로 학습
+- ✅ Fooling Rate 자동 측정
+- ✅ 효율성: 개별 공격 대비 100배 빠름
+
+#### 4.3 Deepfake 생성
+
+**얼굴 교체 및 립싱크** - InsightFace 기반 실시간 얼굴 스왑
+
+```python
+from cli.advanced_menu import deepfake_menu
+
+# CLI 메뉴 → D (Deepfake 생성)
+# → 소스 이미지 선택 (교체할 얼굴)
+# → 타겟 이미지/비디오 선택 (배경)
+# → 자동 얼굴 교체 실행
+```
+
+**지원 기능**:
+- **Face Swap**: 이미지/비디오에서 얼굴 교체
+- **Face Comparison**: 얼굴 유사도 측정
+- **Lip Sync**: 오디오-비디오 동기화 (개발 중)
+
+**윤리 검증**: 동의 확인 필수, 악의적 사용 금지
+
+#### 4.4 음성 복제 (Voice Cloning)
+
+**실시간 음성 복제** - 짧은 샘플로 목소리 재현
+
+```python
+from cli.advanced_menu import voice_cloning_menu
+
+# CLI 메뉴 → V (음성 복제)
+# → 타겟 음성 샘플 업로드 (3-10초)
+# → 복제할 텍스트 입력
+# → 자동 음성 생성
+```
+
+**특징**:
+- ✅ 3-10초 샘플로 학습
+- ✅ 다국어 지원
+- ✅ 감정 표현 복제
+- ✅ 실시간 생성
+
+#### 4.5 크로스 모달 복합 공격
+
+**텍스트 + 이미지 + 오디오 + 비디오 조합**
+
+```python
+from cli.advanced_menu import cross_modal_menu
+
+# 텍스트 프롬프트 + Foolbox 이미지 + Voice 오디오
+# → 멀티모달 조합 공격
+# → Vision 모델 테스트
+```
+
+#### CLI 메뉴 사용법
+
+```bash
+python interactive_cli.py
+
+# 메뉴 → A: Foolbox 이미지 공격
+# 메뉴 → U: ART Universal Perturbation
+# 메뉴 → D: Deepfake 생성
+# 메뉴 → V: 음성 복제
+# 메뉴 → X: 크로스 모달 복합 공격
+# 메뉴 → P: GPT-4o Attack Planner (AI 기반 전략 수립)
+```
+
+---
+
+### 🎯 5. Model Extraction & Data Poisoning ⭐ 신규
+
+**LLM 모델 복제 및 학습 데이터 오염** - AI 공급망 공격
+
+#### 5.1 Model Extraction (모델 추출)
+
+**타겟 LLM의 행동 패턴 복제** - 4가지 전략
+
+```python
+from adversarial.model_extraction import ModelExtractionAttack
+
+# 초기화
+extractor = ModelExtractionAttack(
+    db=db,
+    target_profile=openai_profile,
+    student_profile=local_model_profile  # 선택사항
+)
+
+# 전략 1: Random Sampling (기본)
+result = await extractor.random_query_extraction(num_queries=100)
+
+# 전략 2: Active Learning (효율적)
+result = await extractor.active_learning_extraction(initial_samples=50)
+
+# 전략 3: Distillation (고급)
+result = await extractor.distillation_extraction()
+
+# 전략 4: Prompt-based Stealing (창의적)
+result = await extractor.prompt_based_stealing()
+
+print(f"Agreement Rate: {result['agreement_rate']*100:.1f}%")
+print(f"Queries Used: {result['queries_used']}")
+```
+
+**4가지 전략**:
+1. **Random Sampling**: DB에서 랜덤 프롬프트 샘플링 → 타겟 응답 수집
+2. **Active Learning**: 불확실성 높은 샘플 우선 쿼리 → Query budget 최적화
+3. **Distillation**: Knowledge Distillation 기반 모델 복제
+4. **Prompt-based Stealing**: 메타 프롬프트로 시스템 정보 추출
+
+**측정 지표**:
+- **Agreement Rate**: Student 모델과 Target 모델의 응답 유사도 (0.0-1.0)
+- **Quality Score**: 복제 품질 점수
+- **Queries Used**: 사용한 API 호출 수
+
+**CLI 사용법**:
+```bash
+python interactive_cli.py
+
+# 메뉴 → E: Model Extraction
+# → 타겟 프로필 선택 (OpenAI GPT-4o 등)
+# → Student 프로필 선택 (선택사항)
+# → 전략 선택 (1-4)
+# → Query budget 설정 (100-10000)
+# → 자동 실행 및 결과 저장
+```
+
+#### 5.2 Data Poisoning (데이터 오염)
+
+**Fine-tuning 데이터셋에 백도어 주입** - 4가지 공격 유형
+
+```python
+from adversarial.data_poisoning import DataPoisoningGenerator
+
+poisoner = DataPoisoningGenerator(db)
+
+# 공격 1: Backdoor Injection (트리거 기반 백도어)
+result = poisoner.generate_backdoor_samples(
+    clean_prompts=prompts,
+    trigger_text="TRIGGER_PHRASE",
+    target_behavior="harmful_output",
+    poison_rate=0.1
+)
+
+# 공격 2: Label Flipping (레이블 조작)
+result = poisoner.generate_label_flip_samples(
+    clean_dataset=dataset,
+    flip_rate=0.1,
+    target_class="harmful"
+)
+
+# 공격 3: Clean-label Poisoning (은닉 백도어)
+result = poisoner.generate_clean_label_poison(
+    clean_prompts=prompts,
+    poison_rate=0.1
+)
+
+# 공격 4: Prompt Injection (RAG/Context 오염)
+result = poisoner.generate_prompt_injection_poison(
+    system_prompts=system_prompts,
+    injection_payload="MALICIOUS_INSTRUCTION",
+    poison_rate=0.1
+)
+
+# 데이터셋 내보내기 (4가지 형식)
+file_path = poisoner.export_dataset(format="huggingface")
+# 지원 형식: csv, json, jsonl, huggingface
+```
+
+**4가지 공격 유형**:
+1. **Backdoor Injection**: 트리거 텍스트 주입 → 특정 행동 유도
+2. **Label Flipping**: 레이블 조작 (safe → unsafe)
+3. **Clean-label Poisoning**: 레이블은 정상, 패턴만 은닉
+4. **Prompt Injection**: System prompt/Context에 악성 명령어 주입
+
+**내보내기 형식**:
+- **CSV**: 간단한 표 형식
+- **JSON**: 전체 구조 보존
+- **JSONL**: 스트리밍 가능
+- **Hugging Face**: 공식 데이터셋 형식 (dataset_dict.json + train.json)
+
+**CLI 사용법**:
+```bash
+python interactive_cli.py
+
+# 메뉴 → B: Data Poisoning
+# → 데이터 소스 선택 (DB 프롬프트 또는 샘플 생성)
+# → 공격 유형 선택 (1-4)
+# → Trigger 텍스트 입력
+# → Poison 비율 설정 (5-30%)
+# → 자동 실행 및 내보내기
+```
+
+**데이터베이스 스키마**:
+```sql
+-- Model Extraction 테이블 (4개)
+model_extraction_sessions      -- 세션 정보
+extraction_queries             -- 쿼리 기록
+model_behavior_analysis        -- 행동 분석
+extracted_model_metadata       -- 추출된 메타데이터
+
+-- Data Poisoning 테이블 (5개)
+poisoning_campaigns            -- 캠페인 정보
+poisoned_samples               -- 오염된 샘플
+poisoning_effectiveness        -- 효과 측정
+poisoned_dataset_exports       -- 내보내기 기록
+```
+
+---
+
+### 🔄 6. Multi-turn Jailbreak System
 
 **7가지 전략으로 60-82.5% 공격 성공률 (ASR)** - 논문 기반 검증된 전략
 
@@ -828,7 +1107,7 @@ CREATE TABLE multi_turn_conversations (
 
 ---
 
-### 🛡️ 5. Hybrid Judge System
+### 🛡️ 7. Hybrid Judge System
 
 **80% API 비용 절감 + 95% 정확도** - Rule-based + LLM 2단계 검증
 
@@ -905,7 +1184,7 @@ print(f"API cost: ${result['api_cost']:.4f}")
 
 ---
 
-### 🛡️ 6. Security Scanner (Code Vulnerability Analysis)
+### 🛡️ 8. Security Scanner (Code Vulnerability Analysis)
 
 **Semgrep + Bandit + Ruff + LLM** - 코드 취약점 자동 스캔
 
@@ -977,7 +1256,7 @@ API 프로필 선택: openai-gpt4
 
 ---
 
-### 🌐 7. System Scanner
+### 🌐 9. System Scanner
 
 **Nmap + CVE 매칭** - 네트워크 스캔 + 알려진 취약점 자동 탐지
 
@@ -999,32 +1278,6 @@ Scan type: full
   High: 5개
   Medium: 8개
 ```
-
----
-
-### 🎨 5. Multimodal Jailbreak
-
-**이미지/오디오/비디오 적대적 공격** - Vision 모델 우회
-
-- **이미지**: Transparent Text, LSB Steganography, FGSM, Pixel Perturbation
-- **오디오**: Ultrasonic Commands, Subliminal Messages, Frequency Domain Attacks
-- **비디오**: Temporal Attacks, Subliminal Frames, Frame-by-frame Injection
-
----
-
-### 📚 6. 방대한 공격 데이터베이스
-
-**22,340개 실제 저장된 프롬프트** - 카테고리별 통계
-
-| 카테고리 | 프롬프트 수 | 비율 | 데이터 소스 |
-|---------|-----------|------|------------|
-| **prompt_injection** | 17,064개 | 76% | JailbreakChat |
-| **jailbreak** | 1,948개 | 9% | 커뮤니티 수집 |
-| **profanity** | 1,598개 | 7% | Toxicity 데이터셋 |
-| **advbench-harmful** | 520개 | 2% | AdvBench 벤치마크 |
-| **information_hazard** | 247개 | 1% | Security 연구 |
-| **malicious_use** | 243개 | 1% | Red Team 수집 |
-| **기타** | 720개 | 4% | Custom |
 
 ---
 
@@ -1125,11 +1378,34 @@ python interactive_cli.py
 ⚔️ ATTACK (공격)
   8. 텍스트 LLM 테스트 (단일/배치)
   9. 멀티모달 LLM 테스트 (Vision 모델)
-  m. Multi-turn 공격 (7가지 전략)
-  c. CTF Framework ⭐ (웹 취약점 자동 공격 + 대회 크롤러)
   g. GARAK 보안 스캔 (NVIDIA Garak)
-  x. Security Scanner (코드 취약점 스캔)
-  n. System Scanner (Nmap + CVE 매칭)
+
+🧪 ADVANCED (고급 Adversarial 공격) ⭐ 신규
+  A. Foolbox 이미지 공격 (FGSM, PGD, C&W, DeepFool)
+  U. ART Universal Perturbation (범용 섭동)
+  D. Deepfake 생성 (얼굴 교체)
+  V. 음성 복제 (Voice Cloning)
+  X. 크로스 모달 복합 공격
+  P. GPT-4o Attack Planner (AI 기반 전략 수립)
+  E. Model Extraction (모델 추출) ⭐ 신규
+  B. Data Poisoning (데이터 오염) ⭐ 신규
+
+🔄 MULTI-TURN (멀티턴 공격)
+  0. Multi-Turn 공격 캠페인 (7가지 전략)
+  c. 캠페인 목록 및 결과 조회
+
+🛡️ SECURITY (보안 스캔)
+  a. 코드 취약점 스캔 (CWE 기반)
+  v. 스캔 결과 조회
+  y. 시스템 취약점 스캔 (포트/CVE)
+  n. 시스템 스캔 이력
+
+🚩 CTF (자동 풀이)
+  f. CTF 문제 추가
+  w. CTF 대회 크롤링 (자동 수집)
+  t. CTF 자동 풀이 실행
+  k. CTF 문제 목록 및 통계
+  C. Adversarial ML CTF Solver (자동 해결)
 
 ⚙️ SETTINGS (설정)
   s. API 프로필 관리 (10개 제공사)
@@ -1184,11 +1460,24 @@ python interactive_cli.py
 prompt_arsenal/                    # 루트 디렉토리 (4,122줄 CTF 코드)
 │
 ├── 📂 core/                       # 🔥 핵심 모듈
-│   ├── database.py                # ArsenalDB - 19개 테이블 통합 관리
+│   ├── database.py                # ArsenalDB - 28개 테이블 통합 관리 (19→28 ⬆️)
 │   ├── judge.py                   # JudgeSystem - Rule-based 판정
 │   ├── llm_judge.py               # LLMJudge, HybridJudge - ML 판정
 │   ├── config.py                  # Config - 10개 제공사 관리
 │   └── prompt_manager.py          # PromptManager - 라이프사이클
+│
+├── 📂 adversarial/                # 🧪 고급 적대적 공격 (신규) ⭐
+│   ├── foolbox_attacks.py         # FoolboxAttack - FGSM, PGD, C&W, DeepFool (13KB)
+│   ├── art_attacks.py             # ARTAttack - Universal Perturbation (28KB)
+│   ├── ctf_solver.py              # CTF Solver - Adversarial ML CTF
+│   ├── model_extraction.py        # ModelExtractionAttack - 4가지 전략 (15KB) ⭐
+│   └── data_poisoning.py          # DataPoisoningGenerator - 4가지 공격 (23KB) ⭐
+│
+├── 📂 cli/                        # 📟 CLI 메뉴 모듈 (신규) ⭐
+│   ├── advanced_menu.py           # 고급 공격 메뉴 (Foolbox, ART, Deepfake, Voice) (676줄)
+│   ├── extraction_menu.py         # Model Extraction & Data Poisoning 메뉴 (393줄) ⭐
+│   ├── ctf_menu.py                # Adversarial ML CTF Solver 메뉴 (195줄)
+│   └── ai_pipeline_menu.py        # AI Attack Pipeline 메뉴 (374줄)
 │
 ├── 📂 ctf/                        # 🎯 CTF Framework (4,122줄)
 │   ├── web_solver.py              # WebVulnerabilitySolver (680줄)
@@ -1269,7 +1558,7 @@ prompt_arsenal/                    # 루트 디렉토리 (4,122줄 CTF 코드)
 
 ---
 
-## 📊 데이터베이스 스키마 (19 테이블)
+## 📊 데이터베이스 스키마 (28 테이블) ⬆️ (+9개 신규)
 
 ### CTF Framework 테이블
 
@@ -1415,6 +1704,89 @@ CREATE TABLE security_findings (
     FOREIGN KEY (scan_id) REFERENCES security_scans(id)
 );
 ```
+
+### Model Extraction 테이블 ⭐ 신규
+
+**model_extraction_sessions** - 추출 세션 정보
+```sql
+CREATE TABLE model_extraction_sessions (
+    id INTEGER PRIMARY KEY,
+    session_name TEXT,
+    target_profile_name TEXT NOT NULL,      -- 타겟 모델 프로필
+    target_provider TEXT NOT NULL,          -- 'openai', 'anthropic'
+    target_model TEXT NOT NULL,             -- 'gpt-4o', 'claude-3.5'
+    student_profile_name TEXT,              -- Student 모델 (선택)
+    student_provider TEXT,
+    student_model TEXT,
+    extraction_strategy TEXT NOT NULL,      -- 'random', 'active', 'distillation', 'prompt'
+    query_budget INTEGER DEFAULT 1000,
+    queries_used INTEGER DEFAULT 0,
+    agreement_rate REAL,                    -- Student와 Target 응답 유사도 (0.0-1.0)
+    quality_score REAL,                     -- 복제 품질 점수
+    start_time TEXT,
+    end_time TEXT,
+    status TEXT DEFAULT 'pending',          -- 'pending', 'running', 'completed'
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**extraction_queries** - 추출 쿼리 기록
+```sql
+CREATE TABLE extraction_queries (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER NOT NULL,
+    prompt_id INTEGER,                      -- prompts 테이블 참조
+    prompt_text TEXT NOT NULL,
+    target_response TEXT NOT NULL,          -- 타겟 모델 응답
+    student_response TEXT,                  -- Student 모델 응답
+    similarity_score REAL,                  -- 응답 유사도
+    response_time REAL,
+    query_timestamp TEXT,
+    FOREIGN KEY (session_id) REFERENCES model_extraction_sessions(id)
+);
+```
+
+**model_behavior_analysis** - 모델 행동 분석
+**extracted_model_metadata** - 추출된 메타데이터 (시스템 프롬프트, 학습 데이터 등)
+
+### Data Poisoning 테이블 ⭐ 신규
+
+**poisoning_campaigns** - 오염 캠페인 정보
+```sql
+CREATE TABLE poisoning_campaigns (
+    id INTEGER PRIMARY KEY,
+    campaign_name TEXT NOT NULL,
+    poison_type TEXT NOT NULL,              -- 'backdoor', 'label_flip', 'clean_label', 'prompt_injection'
+    trigger_type TEXT NOT NULL,             -- 'text', 'pattern', 'none'
+    trigger_pattern TEXT,                   -- 트리거 텍스트/패턴
+    target_behavior TEXT,                   -- 타겟 행동
+    poison_rate REAL DEFAULT 0.1,           -- 오염 비율 (5-30%)
+    num_clean_samples INTEGER,
+    num_poisoned_samples INTEGER,
+    description TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**poisoned_samples** - 오염된 샘플
+```sql
+CREATE TABLE poisoned_samples (
+    id INTEGER PRIMARY KEY,
+    campaign_id INTEGER NOT NULL,
+    original_text TEXT,                     -- 원본 텍스트
+    poisoned_text TEXT NOT NULL,            -- 오염된 텍스트
+    original_label TEXT,                    -- 원본 레이블
+    poisoned_label TEXT,                    -- 오염된 레이블
+    is_poisoned BOOLEAN DEFAULT 1,
+    trigger_position TEXT,                  -- 'start', 'middle', 'end', 'random'
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (campaign_id) REFERENCES poisoning_campaigns(id)
+);
+```
+
+**poisoning_effectiveness** - 효과 측정
+**poisoned_dataset_exports** - 내보내기 기록 (CSV, JSON, JSONL, Hugging Face)
 
 ### 기타 테이블
 
